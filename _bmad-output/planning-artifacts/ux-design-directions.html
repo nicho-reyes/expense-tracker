@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>expense-dashboard — UX Design Directions</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f5; color: #18181b; }
+
+  /* Page layout */
+  .page-header { background: #18181b; color: #f4f4f5; padding: 32px 40px; }
+  .page-header h1 { font-size: 24px; font-weight: 700; }
+  .page-header p { font-size: 14px; color: #a1a1aa; margin-top: 6px; }
+  .theme-toggle { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; background: #27272a; border: 1px solid #3f3f46; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 13px; color: #e4e4e7; }
+  .theme-toggle:hover { background: #3f3f46; }
+
+  .directions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 40px; padding: 40px; max-width: 1600px; margin: 0 auto; }
+  .direction-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .direction-label { padding: 16px 20px; border-bottom: 1px solid #f4f4f5; }
+  .direction-label h2 { font-size: 15px; font-weight: 700; color: #18181b; }
+  .direction-label p { font-size: 12px; color: #71717a; margin-top: 3px; }
+
+  /* Phone frame */
+  .phone-frame { width: 340px; height: 680px; margin: 20px auto; background: #f4f4f5; border-radius: 40px; border: 8px solid #18181b; overflow: hidden; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+  .phone-notch { width: 80px; height: 24px; background: #18181b; border-radius: 0 0 14px 14px; position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 10; }
+  .phone-screen { width: 100%; height: 100%; overflow: hidden; position: relative; }
+
+  /* ── SHARED COMPONENTS ── */
+  .status-bar { height: 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-size: 11px; font-weight: 600; }
+  .status-bar-light { background: #fafafa; color: #18181b; }
+  .status-bar-dark { background: #09090b; color: #f4f4f5; }
+
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; display: inline-block; margin-right: 4px; }
+  .sync-label { font-size: 10px; color: #71717a; }
+
+  .fab { width: 52px; height: 52px; border-radius: 16px; background: #4f46e5; display: flex; align-items: center; justify-content: center; position: absolute; bottom: 72px; right: 16px; box-shadow: 0 4px 16px rgba(79,70,229,0.4); z-index: 20; }
+  .fab-dark { background: #6366f1; box-shadow: 0 4px 16px rgba(99,102,241,0.4); }
+  .fab svg { width: 24px; height: 24px; stroke: white; fill: none; stroke-width: 2.5; }
+  .fab-label { position: absolute; bottom: 72px; right: 76px; background: #4f46e5; color: white; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; white-space: nowrap; }
+
+  .bottom-nav { height: 56px; display: flex; align-items: center; border-top: 1px solid #e4e4e7; position: absolute; bottom: 0; left: 0; right: 0; background: white; }
+  .bottom-nav-dark { background: #18181b; border-top-color: #27272a; }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; color: #a1a1aa; cursor: pointer; }
+  .nav-item.active { color: #4f46e5; }
+  .nav-item-dark.active { color: #818cf8; }
+  .nav-icon { width: 20px; height: 20px; }
+  .nav-icon-filled { width: 20px; height: 20px; }
+
+  /* ── DIRECTION 1: Dashboard-First, Bottom Nav ── */
+  .d1-screen { background: #fafafa; height: 100%; }
+  .d1-hero { background: white; margin: 12px 12px 0; border-radius: 16px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .d1-hero-label { font-size: 11px; color: #71717a; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .d1-hero-amount { font-size: 38px; font-weight: 700; color: #18181b; line-height: 1.1; margin-top: 4px; }
+  .d1-hero-sub { font-size: 12px; color: #71717a; margin-top: 4px; }
+  .d1-sparkline { height: 32px; margin-top: 10px; display: flex; align-items: flex-end; gap: 4px; }
+  .d1-spark-bar { flex: 1; border-radius: 3px 3px 0 0; }
+
+  .d1-section-title { font-size: 12px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 12px 6px; }
+  .d1-cat-row { display: flex; align-items: center; padding: 8px 12px; gap: 10px; }
+  .d1-cat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .d1-cat-label { font-size: 13px; color: #18181b; flex: 1; }
+  .d1-cat-bar-wrap { width: 80px; height: 6px; background: #f4f4f5; border-radius: 3px; overflow: hidden; }
+  .d1-cat-bar { height: 100%; border-radius: 3px; }
+  .d1-cat-amount { font-size: 12px; font-weight: 600; color: #3f3f46; width: 44px; text-align: right; }
+
+  /* ── DIRECTION 2: Quick-Add First ── */
+  .d2-screen { background: #fafafa; height: 100%; }
+  .d2-top-bar { background: white; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f4f4f5; }
+  .d2-top-bar-title { font-size: 16px; font-weight: 700; }
+  .d2-month-chip { font-size: 12px; background: #f4f4f5; padding: 4px 10px; border-radius: 20px; color: #71717a; }
+  .d2-form { background: white; margin: 12px; border-radius: 16px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .d2-form-title { font-size: 13px; font-weight: 600; color: #71717a; margin-bottom: 12px; }
+  .d2-field { margin-bottom: 10px; }
+  .d2-field-label { font-size: 11px; font-weight: 500; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .d2-field-value { font-size: 14px; color: #18181b; background: #f9fafb; border: 1px solid #e4e4e7; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; }
+  .d2-field-placeholder { color: #a1a1aa; }
+  .d2-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .d2-cat-chip { font-size: 12px; padding: 5px 10px; border-radius: 20px; color: white; font-weight: 500; }
+  .d2-save-btn { width: 100%; background: #4f46e5; color: white; font-size: 14px; font-weight: 600; padding: 12px; border-radius: 10px; text-align: center; margin-top: 12px; }
+  .d2-mini-dash { margin: 0 12px 12px; background: white; border-radius: 12px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); display: flex; align-items: center; justify-content: space-between; }
+  .d2-mini-total { font-size: 11px; color: #71717a; }
+  .d2-mini-amount { font-size: 20px; font-weight: 700; color: #18181b; }
+  .d2-mini-trend { font-size: 11px; color: #f97316; font-weight: 600; }
+
+  /* ── DIRECTION 3: Dark Dashboard ── */
+  .d3-screen { background: #09090b; height: 100%; }
+  .d3-hero { padding: 16px 16px 0; }
+  .d3-hero-label { font-size: 11px; color: #52525b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+  .d3-hero-amount { font-size: 40px; font-weight: 700; color: #f4f4f5; line-height: 1.1; margin-top: 4px; }
+  .d3-hero-sub { font-size: 12px; color: #52525b; margin-top: 4px; }
+  .d3-sparkline { height: 36px; margin-top: 12px; display: flex; align-items: flex-end; gap: 3px; }
+  .d3-spark-bar { flex: 1; border-radius: 3px 3px 0 0; opacity: 0.5; }
+  .d3-spark-bar.active { opacity: 1; }
+  .d3-divider { height: 1px; background: #27272a; margin: 12px 16px; }
+  .d3-cat-row { display: flex; align-items: center; padding: 7px 16px; gap: 10px; }
+  .d3-cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .d3-cat-label { font-size: 13px; color: #d4d4d8; flex: 1; }
+  .d3-cat-bar-wrap { width: 72px; height: 4px; background: #27272a; border-radius: 2px; overflow: hidden; }
+  .d3-cat-bar { height: 100%; border-radius: 2px; }
+  .d3-cat-amount { font-size: 12px; font-weight: 600; color: #71717a; width: 42px; text-align: right; }
+  .d3-nav { background: #18181b; border-top: 1px solid #27272a; }
+  .d3-fab { background: #6366f1; box-shadow: 0 4px 16px rgba(99,102,241,0.5); }
+
+  /* ── DIRECTION 4: Card Grid Dashboard ── */
+  .d4-screen { background: #f4f4f5; height: 100%; }
+  .d4-top { background: white; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+  .d4-month-nav { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .d4-nav-arrow { width: 24px; height: 24px; background: #f4f4f5; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #71717a; }
+  .d4-cards-row { display: flex; gap: 8px; padding: 10px 10px 0; }
+  .d4-card { flex: 1; background: white; border-radius: 12px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .d4-card-label { font-size: 10px; color: #a1a1aa; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+  .d4-card-value { font-size: 20px; font-weight: 700; color: #18181b; margin-top: 2px; }
+  .d4-card-sub { font-size: 10px; color: #71717a; margin-top: 1px; }
+  .d4-card.accent { background: #4f46e5; }
+  .d4-card.accent .d4-card-label { color: #a5b4fc; }
+  .d4-card.accent .d4-card-value { color: white; }
+  .d4-card.accent .d4-card-sub { color: #c7d2fe; }
+  .d4-breakdown { background: white; margin: 8px 10px 0; border-radius: 12px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .d4-breakdown-title { font-size: 12px; font-weight: 600; color: #71717a; margin-bottom: 10px; }
+  .d4-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .d4-bar-label { font-size: 12px; color: #3f3f46; width: 72px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .d4-bar-track { flex: 1; height: 8px; background: #f4f4f5; border-radius: 4px; overflow: hidden; }
+  .d4-bar-fill { height: 100%; border-radius: 4px; }
+  .d4-bar-amt { font-size: 11px; font-weight: 600; color: #71717a; width: 36px; text-align: right; }
+
+  /* ── DIRECTION 5: List-First with Inline Summary ── */
+  .d5-screen { background: #fafafa; height: 100%; }
+  .d5-summary-banner { background: #4f46e5; padding: 14px 14px 20px; }
+  .d5-banner-row { display: flex; justify-content: space-between; align-items: flex-start; }
+  .d5-banner-label { font-size: 11px; color: #c7d2fe; font-weight: 500; }
+  .d5-banner-amount { font-size: 32px; font-weight: 700; color: white; }
+  .d5-banner-sub { font-size: 11px; color: #c7d2fe; }
+  .d5-banner-month { font-size: 12px; font-weight: 600; color: white; text-align: right; }
+  .d5-mini-bars { display: flex; gap: 3px; align-items: flex-end; height: 20px; margin-top: 10px; }
+  .d5-mini-bar { flex: 1; border-radius: 2px 2px 0 0; background: rgba(255,255,255,0.25); }
+  .d5-mini-bar.active { background: white; }
+  .d5-list-section { background: white; border-radius: 16px 16px 0 0; margin-top: -8px; flex: 1; }
+  .d5-list-header { padding: 14px 14px 8px; display: flex; justify-content: space-between; align-items: center; }
+  .d5-list-title { font-size: 13px; font-weight: 600; color: #18181b; }
+  .d5-filter-chips { display: flex; gap: 6px; }
+  .d5-chip { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: #f4f4f5; color: #71717a; }
+  .d5-chip.active { background: #eef2ff; color: #4f46e5; }
+  .d5-entry { display: flex; align-items: center; padding: 10px 14px; gap: 10px; border-top: 1px solid #f9fafb; }
+  .d5-entry-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .d5-entry-info { flex: 1; }
+  .d5-entry-cat { font-size: 13px; font-weight: 500; color: #18181b; }
+  .d5-entry-remarks { font-size: 11px; color: #a1a1aa; }
+  .d5-entry-right { text-align: right; }
+  .d5-entry-amount { font-size: 14px; font-weight: 600; color: #18181b; }
+  .d5-entry-date { font-size: 11px; color: #a1a1aa; }
+
+  /* ── DIRECTION 6: Minimal / Focused ── */
+  .d6-screen { background: white; height: 100%; }
+  .d6-top { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .d6-month-label { font-size: 13px; font-weight: 600; color: #18181b; }
+  .d6-month-arrows { display: flex; gap: 4px; }
+  .d6-arrow { width: 28px; height: 28px; border-radius: 8px; background: #f4f4f5; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #71717a; }
+  .d6-hero-block { padding: 0 16px 16px; border-bottom: 1px solid #f4f4f5; }
+  .d6-hero-total { font-size: 42px; font-weight: 700; color: #18181b; letter-spacing: -1px; }
+  .d6-hero-currency { font-size: 16px; font-weight: 600; color: #a1a1aa; vertical-align: super; margin-right: 2px; }
+  .d6-hero-label { font-size: 12px; color: #a1a1aa; margin-top: 2px; }
+  .d6-trend { font-size: 12px; color: #f97316; font-weight: 600; }
+  .d6-cat-section { padding: 12px 0; }
+  .d6-cat-item { display: flex; align-items: center; padding: 9px 16px; cursor: pointer; }
+  .d6-cat-item:hover { background: #fafafa; }
+  .d6-color-bar { width: 4px; height: 36px; border-radius: 2px; margin-right: 12px; flex-shrink: 0; }
+  .d6-cat-info { flex: 1; }
+  .d6-cat-name { font-size: 14px; color: #18181b; font-weight: 500; }
+  .d6-cat-count { font-size: 11px; color: #a1a1aa; }
+  .d6-cat-right { text-align: right; }
+  .d6-cat-amount { font-size: 15px; font-weight: 600; color: #18181b; }
+  .d6-cat-pct { font-size: 11px; color: #a1a1aa; }
+  .d6-chevron { color: #d4d4d8; font-size: 12px; margin-left: 6px; }
+
+  /* ── DIRECTION 7: Quick-Add Sheet (open state) ── */
+  .d7-screen { background: #fafafa; height: 100%; position: relative; }
+  .d7-bg { opacity: 0.3; }
+  .d7-sheet { position: absolute; bottom: 0; left: 0; right: 0; background: white; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 24px rgba(0,0,0,0.12); }
+  .d7-handle { width: 36px; height: 4px; background: #e4e4e7; border-radius: 2px; margin: 12px auto 0; }
+  .d7-sheet-title { font-size: 15px; font-weight: 700; color: #18181b; padding: 12px 16px 4px; }
+  .d7-date-row { display: flex; gap: 8px; padding: 8px 16px; }
+  .d7-date-chip { background: #eef2ff; color: #4f46e5; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 10px; display: flex; align-items: center; gap: 6px; }
+  .d7-cats-scroll { display: flex; gap: 8px; padding: 6px 16px; overflow: hidden; }
+  .d7-cat-tile { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; }
+  .d7-cat-circle { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
+  .d7-cat-selected { outline: 2.5px solid #4f46e5; outline-offset: 2px; }
+  .d7-cat-name { font-size: 10px; color: #71717a; text-align: center; }
+  .d7-amount-row { padding: 10px 16px; }
+  .d7-amount-label { font-size: 11px; color: #a1a1aa; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .d7-amount-input { font-size: 28px; font-weight: 700; color: #18181b; display: flex; align-items: baseline; gap: 4px; }
+  .d7-amount-currency { font-size: 16px; color: #a1a1aa; }
+  .d7-amount-cursor { width: 2px; height: 28px; background: #4f46e5; display: inline-block; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0 } }
+  .d7-remarks-row { padding: 0 16px 10px; }
+  .d7-remarks-input { width: 100%; font-size: 14px; color: #18181b; background: #f9fafb; border: 1px solid #e4e4e7; border-radius: 8px; padding: 8px 12px; }
+  .d7-save-btn { margin: 4px 16px 16px; background: #4f46e5; color: white; font-size: 15px; font-weight: 600; padding: 14px; border-radius: 12px; text-align: center; }
+
+  /* ── DIRECTION 8: Dark Quick-Add ── */
+  .d8-screen { background: #09090b; height: 100%; position: relative; }
+  .d8-sheet { position: absolute; bottom: 0; left: 0; right: 0; background: #18181b; border-radius: 20px 20px 0 0; border-top: 1px solid #27272a; }
+  .d8-handle { width: 36px; height: 4px; background: #3f3f46; border-radius: 2px; margin: 12px auto 0; }
+  .d8-sheet-title { font-size: 15px; font-weight: 700; color: #f4f4f5; padding: 12px 16px 4px; }
+  .d8-date-chip { background: #312e81; color: #a5b4fc; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; margin: 8px 16px; }
+  .d8-cats-scroll { display: flex; gap: 8px; padding: 6px 16px; overflow: hidden; }
+  .d8-cat-tile { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; }
+  .d8-cat-circle { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; opacity: 0.7; }
+  .d8-cat-selected { opacity: 1; outline: 2.5px solid #818cf8; outline-offset: 2px; }
+  .d8-cat-name { font-size: 10px; color: #52525b; text-align: center; }
+  .d8-amount-row { padding: 12px 16px 8px; }
+  .d8-amount-label { font-size: 11px; color: #52525b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .d8-amount-input { font-size: 30px; font-weight: 700; color: #f4f4f5; display: flex; align-items: baseline; gap: 4px; }
+  .d8-amount-currency { font-size: 16px; color: #52525b; }
+  .d8-save-btn { margin: 4px 16px 16px; background: #6366f1; color: white; font-size: 15px; font-weight: 600; padding: 14px; border-radius: 12px; text-align: center; }
+  .d8-remarks { margin: 0 16px 10px; font-size: 14px; color: #52525b; background: #27272a; border-radius: 8px; padding: 10px 12px; }
+
+  /* Selection panel */
+  .selection-panel { padding: 16px 20px; background: #fafafa; border-top: 1px solid #e4e4e7; }
+  .selection-label { font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .select-btn { display: inline-block; background: #4f46e5; color: white; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
+  .select-btn:hover { background: #4338ca; }
+  .select-btn.selected { background: #22c55e; }
+
+  /* SVG icons inline */
+  .icon-plus { display: inline-block; width: 20px; height: 20px; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>expense-dashboard — Design Directions</h1>
+  <p>8 layout and visual approaches for evaluation. Review each, then select the direction (or combination) that feels right.</p>
+</div>
+
+<div class="directions-grid">
+
+  <!-- ── Direction 1: Dashboard-First, Bottom Nav ── -->
+  <div class="direction-card">
+    <div class="direction-label">
+      <h2>Direction 1 — Dashboard-First, Bottom Nav</h2>
+      <p>Opens to monthly overview. FAB for quick-add, bottom nav for navigation.</p>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen d1-screen">
+        <div class="status-bar status-bar-light">
+          <span>9:41</span>
+          <span><span class="sync-dot"></span><span class="sync-label">synced 2m ago</span></span>
+        </div>
+        <!-- Hero card -->
+        <div class="d1-hero">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div class="d1-hero-label">May 2026</div>
+              <div class="d1-hero-amount">CHF 2,480</div>
+              <div class="d1-hero-sub">↑ CHF 330 vs. avg</div>
+            </div>
+            <div style="font-size:11px;color:#a1a1aa;display:flex;align-items:center;gap:4px;">
+              <span style="color:#d4d4d8;">‹</span> May <span style="color:#d4d4d8;">›</span>
+            </div>
+          </div>
+          <div class="d1-sparkline">
+            <div class="d1-spark-bar" style="height:40%;background:#e4e4e7;"></div>
+            <div class="d1-spark-bar" style="height:55%;background:#e4e4e7;"></div>
+            <div class="d1-spark-bar" style="height:60%;background:#e4e4e7;"></div>
+            <div class="d1-spark-bar" style="height:50%;background:#e4e4e7;"></div>
+            <div class="d1-spark-bar" style="height:65%;background:#e4e4e7;"></div>
+            <div class="d1-spark-bar" style="height:45%;background:#e4e4e7;"></div>
+            <div class="d1-spark-bar" style="height:100%;background:#4f46e5;"></div>
+          </div>
+        </div>
+        <!-- Category breakdown -->
+        <div class="d1-section-title">By Category</div>
+        <div class="d1-cat-row">
+          <div class="d1-cat-dot" style="background:#71717a;"></div>
+          <div class="d1-cat-label">Rent</div>
+          <div class="d1-cat-bar-wrap"><div class="d1-cat-bar" style="width:82%;background:#71717a;"></div></div>
+          <div class="d1-cat-amount">1,800</div>
+        </div>
+        <div class="d1-cat-row">
+          <div class="d1-cat-dot" style="background:#f97316;"></div>
+          <div class="d1-cat-label">Eat out</div>
+          <div class="d1-cat-bar-wrap"><div class="d1-cat-bar" style="width:56%;background:#f97316;"></div></div>
+          <div class="d1-cat-amount">460</div>
+        </div>
+        <div class="d1-cat-row">
+          <div class="d1-cat-dot" style="background:#22c55e;"></div>
+          <div class="d1-cat-label">Groceries</div>
+          <div class="d1-cat-bar-wrap"><div class="d1-cat-bar" style="width:38%;background:#22c55e;"></div></div>
+          <div class="d1-cat-amount">310</div>
+        </div>
+        <div class="d1-cat-row">
+          <div class="d1-cat-dot" style="background:#3b82f6;"></div>
+          <div class="d1-cat-label">Transportation</div>
+          <div class="d1-cat-bar-wrap"><div class="d1-cat-bar" style="width:18%;background:#3b82f6;"></div></div>
+          <div class="d1-cat-amount">145</div>
+        </div>
+        <div class="d1-cat-row">
+          <div class="d1-cat-dot" style="background:#a855f7;"></div>
+          <div class="d1-cat-label">Leisure</div>
+          <div class="d1-cat-bar-wrap"><div class="d1-cat-bar" style="width:14%;background:#a855f7;"></div></div>
+          <div class="d1-cat-amount">112</div>
+        </div>
+        <!-- FAB -->
+        <div class="fab">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <!-- Bottom Nav -->
+        <div class="bottom-nav" style="position:absolute;">
+          <div class="nav-item active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span>Dashboard</span>
+          </div>
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="#a1a1aa"/><circle cx="3" cy="12" r="1" fill="#a1a1aa"/><circle cx="3" cy="18" r="1" fill="#a1a1aa"/></svg>
+            <span>Entries</span>
+          </div>
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+            <span>Settings</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="selection-panel">
+      <div class="selection-label">Strengths</div>
+      <p style="font-size:12px;color:#71717a;line-height:1.5;">Dashboard-first suits review mode. FAB always accessible. Standard mobile pattern, immediately familiar.</p>
+    </div>
+  </div>
+
+  <!-- ── Direction 2: Quick-Add First ── -->
+  <div class="direction-card">
+    <div class="direction-label">
+      <h2>Direction 2 — Quick-Add First</h2>
+      <p>Opens to entry form. Dashboard accessible via tab. Capture is the default state.</p>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen d2-screen">
+        <div class="status-bar status-bar-light">
+          <span>9:41</span>
+          <span><span class="sync-dot"></span><span class="sync-label">synced 2m ago</span></span>
+        </div>
+        <div class="d2-mini-dash">
+          <div>
+            <div class="d2-mini-total">May total</div>
+            <div class="d2-mini-amount">CHF 2,480</div>
+          </div>
+          <div class="d2-mini-trend">↑ +330 vs avg</div>
+        </div>
+        <div class="d2-form">
+          <div class="d2-form-title">Add expense</div>
+          <div class="d2-field">
+            <div class="d2-field-label">Date</div>
+            <div class="d2-field-value">
+              <span>Today, 8 May</span>
+              <span style="color:#4f46e5;font-size:12px;">change</span>
+            </div>
+          </div>
+          <div class="d2-field">
+            <div class="d2-field-label">Category</div>
+            <div class="d2-cats">
+              <div class="d2-cat-chip" style="background:#22c55e;">Groceries</div>
+              <div class="d2-cat-chip" style="background:#f97316;">Eat out</div>
+              <div class="d2-cat-chip" style="background:#3b82f6;">Transport</div>
+              <div class="d2-cat-chip" style="background:#a855f7;">Leisure</div>
+              <div class="d2-cat-chip" style="background:#e4e4e7;color:#71717a;">More…</div>
+            </div>
+          </div>
+          <div class="d2-field">
+            <div class="d2-field-label">Amount (CHF)</div>
+            <div class="d2-field-value">
+              <span class="d2-field-placeholder">0.00</span>
+            </div>
+          </div>
+          <div class="d2-field">
+            <div class="d2-field-label">Remarks</div>
+            <div class="d2-field-value">
+              <span class="d2-field-placeholder">Merchant, notes…</span>
+            </div>
+          </div>
+          <div class="d2-save-btn">Save</div>
+        </div>
+        <!-- Bottom Nav -->
+        <div class="bottom-nav" style="position:absolute;">
+          <div class="nav-item active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Add</span>
+          </div>
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span>Dashboard</span>
+          </div>
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>
+            <span>Entries</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="selection-panel">
+      <div class="selection-label">Strengths</div>
+      <p style="font-size:12px;color:#71717a;line-height:1.5;">Matches the "log before you forget" use case exactly. Mini dashboard banner gives context without switching screens.</p>
+    </div>
+  </div>
+
+  <!-- ── Direction 3: Dark Dashboard ── -->
+  <div class="direction-card">
+    <div class="direction-label">
+      <h2>Direction 3 — Dark Dashboard</h2>
+      <p>Data-first dark UI. High contrast for numbers, muted for labels.</p>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen d3-screen">
+        <div class="status-bar status-bar-dark">
+          <span>9:41</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;"></span><span style="font-size:10px;color:#52525b;">synced 2m ago</span></span>
+        </div>
+        <div class="d3-hero">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div class="d3-hero-label">May 2026</div>
+              <div class="d3-hero-amount">CHF 2,480</div>
+              <div class="d3-hero-sub">↑ 330 above 6-month avg</div>
+            </div>
+            <div style="font-size:12px;color:#52525b;">‹ › </div>
+          </div>
+          <div class="d3-sparkline">
+            <div class="d3-spark-bar" style="height:40%;background:#6366f1;"></div>
+            <div class="d3-spark-bar" style="height:55%;background:#6366f1;"></div>
+            <div class="d3-spark-bar" style="height:60%;background:#6366f1;"></div>
+            <div class="d3-spark-bar" style="height:50%;background:#6366f1;"></div>
+            <div class="d3-spark-bar" style="height:65%;background:#6366f1;"></div>
+            <div class="d3-spark-bar" style="height:45%;background:#6366f1;"></div>
+            <div class="d3-spark-bar active" style="height:100%;background:#818cf8;"></div>
+          </div>
+        </div>
+        <div class="d3-divider"></div>
+        <div class="d3-cat-row">
+          <div class="d3-cat-dot" style="background:#71717a;"></div>
+          <div class="d3-cat-label">Rent</div>
+          <div class="d3-cat-bar-wrap"><div class="d3-cat-bar" style="width:82%;background:#71717a;"></div></div>
+          <div class="d3-cat-amount">1,800</div>
+        </div>
+        <div class="d3-cat-row">
+          <div class="d3-cat-dot" style="background:#f97316;"></div>
+          <div class="d3-cat-label">Eat out</div>
+          <div class="d3-cat-bar-wrap"><div class="d3-cat-bar" style="width:56%;background:#f97316;"></div></div>
+          <div class="d3-cat-amount">460</div>
+        </div>
+        <div class="d3-cat-row">
+          <div class="d3-cat-dot" style="background:#22c55e;"></div>
+          <div class="d3-cat-label">Groceries</div>
+          <div class="d3-cat-bar-wrap"><div class="d3-cat-bar" style="width:38%;background:#22c55e;"></div></div>
+          <div class="d3-cat-amount">310</div>
+        </div>
+        <div class="d3-cat-row">
+          <div class="d3-cat-dot" style="background:#3b82f6;"></div>
+          <div class="d3-cat-label">Transportation</div>
+          <div class="d3-cat-bar-wrap"><div class="d3-cat-bar" style="width:18%;background:#3b82f6;"></div></div>
+          <div class="d3-cat-amount">145</div>
+        </div>
+        <div class="d3-cat-row">
+          <div class="d3-cat-dot" style="background:#a855f7;"></div>
+          <div class="d3-cat-label">Leisure</div>
+          <div class="d3-cat-bar-wrap"><div class="d3-cat-bar" style="width:14%;background:#a855f7;"></div></div>
+          <div class="d3-cat-amount">112</div>
+        </div>
+        <!-- FAB dark -->
+        <div class="fab fab-dark" style="bottom:64px;">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div class="bottom-nav d3-nav" style="position:absolute;">
+          <div class="nav-item nav-item-dark active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span>Dashboard</span>
+          </div>
+          <div class="nav-item" style="color:#52525b;">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="#52525b" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>
+            <span>Entries</span>
+          </div>
+          <div class="nav-item" style="color:#52525b;">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="#52525b" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/></svg>
+            <span>Settings</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="selection-panel">
+      <div class="selection-label">Strengths</div>
+      <p style="font-size:12px;color:#71717a;line-height:1.5;">Excellent for low-light use. Numbers pop against dark backgrounds. Indigo accent glows. Pairs naturally with the dark theme toggle.</p>
+    </div>
+  </div>
+
+  <!-- ── Direction 4: Card Grid ── -->
+  <div class="direction-card">
+    <div class="direction-label">
+      <h2>Direction 4 — Metric Cards + Bar Chart</h2>
+      <p>KPI cards at top, horizontal bar chart below. Dense but structured.</p>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen d4-screen">
+        <div class="status-bar status-bar-light">
+          <span>9:41</span>
+          <span><span class="sync-dot"></span></span>
+        </div>
+        <div class="d4-top">
+          <div class="d4-month-nav">
+            <div class="d4-nav-arrow">‹</div>
+            <span>May 2026</span>
+            <div class="d4-nav-arrow">›</div>
+          </div>
+        </div>
+        <div class="d4-cards-row">
+          <div class="d4-card accent">
+            <div class="d4-card-label">Total</div>
+            <div class="d4-card-value">2,480</div>
+            <div class="d4-card-sub">CHF this month</div>
+          </div>
+          <div class="d4-card">
+            <div class="d4-card-label">vs avg</div>
+            <div class="d4-card-value" style="color:#f97316;">+330</div>
+            <div class="d4-card-sub">6-month avg</div>
+          </div>
+          <div class="d4-card">
+            <div class="d4-card-label">Entries</div>
+            <div class="d4-card-value">34</div>
+            <div class="d4-card-sub">this month</div>
+          </div>
+        </div>
+        <div class="d4-breakdown">
+          <div class="d4-breakdown-title">Category Breakdown</div>
+          <div class="d4-bar-row">
+            <div class="d4-bar-label">Rent</div>
+            <div class="d4-bar-track"><div class="d4-bar-fill" style="width:82%;background:#71717a;"></div></div>
+            <div class="d4-bar-amt">1,800</div>
+          </div>
+          <div class="d4-bar-row">
+            <div class="d4-bar-label">Eat out</div>
+            <div class="d4-bar-track"><div class="d4-bar-fill" style="width:56%;background:#f97316;"></div></div>
+            <div class="d4-bar-amt">460</div>
+          </div>
+          <div class="d4-bar-row">
+            <div class="d4-bar-label">Groceries</div>
+            <div class="d4-bar-track"><div class="d4-bar-fill" style="width:38%;background:#22c55e;"></div></div>
+            <div class="d4-bar-amt">310</div>
+          </div>
+          <div class="d4-bar-row">
+            <div class="d4-bar-label">Transport</div>
+            <div class="d4-bar-track"><div class="d4-bar-fill" style="width:18%;background:#3b82f6;"></div></div>
+            <div class="d4-bar-amt">145</div>
+          </div>
+          <div class="d4-bar-row">
+            <div class="d4-bar-label">Leisure</div>
+            <div class="d4-bar-track"><div class="d4-bar-fill" style="width:14%;background:#a855f7;"></div></div>
+            <div class="d4-bar-amt">112</div>
+          </div>
+          <div class="d4-bar-row">
+            <div class="d4-bar-label">Shopping</div>
+            <div class="d4-bar-track"><div class="d4-bar-fill" style="width:10%;background:#ec4899;"></div></div>
+            <div class="d4-bar-amt">89</div>
+          </div>
+        </div>
+        <div class="fab">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div class="bottom-nav" style="position:absolute;">
+          <div class="nav-item active"><span style="font-size:16px;">▦</span><span>Dashboard</span></div>
+          <div class="nav-item"><span style="font-size:14px;color:#a1a1aa;">≡</span><span>Entries</span></div>
+          <div class="nav-item"><span style="font-size:14px;color:#a1a1aa;">⚙</span><span>Settings</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="selection-panel">
+      <div class="selection-label">Strengths</div>
+      <p style="font-size:12px;color:#71717a;line-height:1.5;">KPI cards give quick scanning of key numbers. Accent card makes the total unmissable. More data density than Dir 1.</p>
+    </div>
+  </div>
+
+  <!-- ── Direction 5: List-First ── -->
+  <div class="direction-card">
+    <div class="direction-label">
+      <h2>Direction 5 — List-First with Header Banner</h2>
+      <p>Entry list is primary. Summary banner collapses as user scrolls.</p>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen d5-screen">
+        <div class="status-bar" style="background:#4f46e5;color:white;">
+          <span>9:41</span>
+          <span style="font-size:10px;color:#c7d2fe;">●  synced</span>
+        </div>
+        <div class="d5-summary-banner">
+          <div class="d5-banner-row">
+            <div>
+              <div class="d5-banner-label">May 2026</div>
+              <div class="d5-banner-amount">CHF 2,480</div>
+              <div class="d5-banner-sub">↑ +330 vs. 6-month avg</div>
+            </div>
+            <div style="display:flex;gap:4px;align-items:center;">
+              <span style="font-size:12px;color:#c7d2fe;">‹</span>
+              <span class="d5-banner-month">May</span>
+              <span style="font-size:12px;color:#c7d2fe;">›</span>
+            </div>
+          </div>
+          <div class="d5-mini-bars">
+            <div class="d5-mini-bar" style="height:40%;"></div>
+            <div class="d5-mini-bar" style="height:55%;"></div>
+            <div class="d5-mini-bar" style="height:60%;"></div>
+            <div class="d5-mini-bar" style="height:50%;"></div>
+            <div class="d5-mini-bar" style="height:65%;"></div>
+            <div class="d5-mini-bar" style="height:45%;"></div>
+            <div class="d5-mini-bar active" style="height:100%;"></div>
+          </div>
+        </div>
+        <div class="d5-list-section">
+          <div class="d5-list-header">
+            <div class="d5-list-title">All entries</div>
+            <div class="d5-filter-chips">
+              <div class="d5-chip active">May</div>
+              <div class="d5-chip">Cat</div>
+              <div class="d5-chip">Search</div>
+            </div>
+          </div>
+          <div class="d5-entry">
+            <div class="d5-entry-dot" style="background:#22c55e;"></div>
+            <div class="d5-entry-info"><div class="d5-entry-cat">Groceries</div><div class="d5-entry-remarks">Migros</div></div>
+            <div class="d5-entry-right"><div class="d5-entry-amount">CHF 22.30</div><div class="d5-entry-date">8 May</div></div>
+          </div>
+          <div class="d5-entry">
+            <div class="d5-entry-dot" style="background:#f97316;"></div>
+            <div class="d5-entry-info"><div class="d5-entry-cat">Eat out</div><div class="d5-entry-remarks">Lunch, Tibits</div></div>
+            <div class="d5-entry-right"><div class="d5-entry-amount">CHF 18.50</div><div class="d5-entry-date">7 May</div></div>
+          </div>
+          <div class="d5-entry">
+            <div class="d5-entry-dot" style="background:#3b82f6;"></div>
+            <div class="d5-entry-info"><div class="d5-entry-cat">Transportation</div><div class="d5-entry-remarks">Tram</div></div>
+            <div class="d5-entry-right"><div class="d5-entry-amount">CHF 4.20</div><div class="d5-entry-date">7 May</div></div>
+          </div>
+          <div class="d5-entry">
+            <div class="d5-entry-dot" style="background:#f97316;"></div>
+            <div class="d5-entry-info"><div class="d5-entry-cat">Eat out</div><div class="d5-entry-remarks">Avec</div></div>
+            <div class="d5-entry-right"><div class="d5-entry-amount">CHF 6.80</div><div class="d5-entry-date">6 May</div></div>
+          </div>
+        </div>
+        <div class="fab">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div class="bottom-nav" style="position:absolute;">
+          <div class="nav-item active"><span>≡</span><span>Entries</span></div>
+          <div class="nav-item"><span>▦</span><span>Dashboard</span></div>
+          <div class="nav-item"><span>⚙</span><span>Settings</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="selection-panel">
+      <div class="selection-label">Strengths</div>
+      <p style="font-size:12px;color:#71717a;line-height:1.5;">Entry list as primary surface feels like a ledger — familiar from Sheets. Indigo header banner provides summary context at the top.</p>
+    </div>
+  </div>
+
+  <!-- ── Direction 6: Minimal Category-Drill Dashboard ── -->
+  <div class="direction-card">
+    <div class="direction-label">
+      <h2>Direction 6 — Minimal, Category-Drill Focus</h2>
+      <p>Ultra-clean. Large total, left-bar color coding, each row is tappable.</p>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen d6-screen">
+        <div class="status-bar status-bar-light">
+          <span>9:41</span>
+          <span><span class="sync-dot"></span></span>
+        </div>
+        <div class="d6-top">
+          <div class="d6-month-label">May 2026</div>
+          <div class="d6-month-arrows">
+            <div class="d6-arrow">‹</div>
+            <div class="d6-arrow">›</div>
+          </div>
+        </div>
+        <div class="d6-hero-block">
+          <div class="d6-hero-total"><span class="d6-hero-currency">CHF</span>2,480</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+            <div class="d6-hero-label">this month</div>
+            <div class="d6-trend">↑ +330 vs avg</div>
+          </div>
+        </div>
+        <div class="d6-cat-section">
+          <div class="d6-cat-item">
+            <div class="d6-color-bar" style="background:#71717a;"></div>
+            <div class="d6-cat-info"><div class="d6-cat-name">Rent</div><div class="d6-cat-count">1 entry</div></div>
+            <div class="d6-cat-right"><div class="d6-cat-amount">1,800</div><div class="d6-cat-pct">73%</div></div>
+            <div class="d6-chevron">›</div>
+          </div>
+          <div class="d6-cat-item">
+            <div class="d6-color-bar" style="background:#f97316;"></div>
+            <div class="d6-cat-info"><div class="d6-cat-name">Eat out</div><div class="d6-cat-count">11 entries</div></div>
+            <div class="d6-cat-right"><div class="d6-cat-amount">460</div><div class="d6-cat-pct">19%</div></div>
+            <div class="d6-chevron">›</div>
+          </div>
+          <div class="d6-cat-item">
+            <div class="d6-color-bar" style="background:#22c55e;"></div>
+            <div class="d6-cat-info"><div class="d6-cat-name">Groceries</div><div class="d6-cat-count">8 entries</div></div>
+            <div class="d6-cat-right"><div class="d6-cat-amount">310</div><div class="d6-cat-pct">13%</div></div>
+            <div class="d6-chevron">›</div>
+          </div>
+          <div class="d6-cat-item">
+            <div class="d6-color-bar" style="background:#3b82f6;"></div>
+            <div class="d6-cat-info"><div class="d6-cat-name">Transportation</div><div class="d6-cat-count">6 entries</div></div>
+            <div class="d6-cat-right"><div class="d6-cat-amount">145</div><div class="d6-cat-pct">6%</div></div>
+            <div class="d6-chevron">›</div>
+          </div>
+          <div class="d6-cat-item">
+            <div class="d6-color-bar" style="background:#a855f7;"></div>
+            <div class="d6-cat-info"><div class="d6-cat-name">Leisure</div><div class="d6-cat-count">4 entries</div></div>
+            <div class="d6-cat-right"><div class="d6-cat-amount">112</div><div class="d6-cat-pct">5%</div></div>
+            <div class="d6-chevron">›</div>
+          </div>
+        </div>
+        <div class="fab">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <div class="bottom-nav" style="position:absolute;">
+          <div class="nav-item active"><span>▦</span><span>Dashboard</span></div>
+          <div class="nav-item"><span>≡</span><span>Entries</span></div>
+          <div class="nav-item"><span>⚙</span><span>Settings</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="selection-panel">
+      <div class="selection-label">Strengths</div>
+      <p style="font-size:12px;color:#71717a;line-height:1.5;">Clearest drill-down affordance — every row visibly tappable. Entry count per category adds useful context. Very readable at a glance.</p>
+    </div>
+  </div>
+
+  <!-- ── Direction 7: Quick-Add Sheet (Open) ── -->
+  <div class="direction-card">
+    <div class="direction-label">
+      <h2>Direction 7 — Quick-Add Bottom Sheet (Open State)</h2>
+      <p>Shows the add sheet open over the dashboard. Category tiles, live amount, inline date.</p>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen d7-screen">
+        <div class="status-bar status-bar-light">
+          <span>9:41</span>
+          <span><span class="sync-dot"></span></span>
+        </div>
+        <!-- Dimmed dashboard behind sheet -->
+        <div style="opacity:0.2;padding:12px;">
+          <div style="background:white;border-radius:12px;padding:14px;">
+            <div style="font-size:11px;color:#71717a;">May 2026</div>
+            <div style="font-size:32px;font-weight:700;color:#18181b;">CHF 2,480</div>
+          </div>
+        </div>
+        <!-- Bottom sheet -->
+        <div class="d7-sheet">
+          <div class="d7-handle"></div>
+          <div class="d7-sheet-title">New expense</div>
+          <div class="d7-date-row">
+            <div class="d7-date-chip">📅 Today, 8 May</div>
+          </div>
+          <div style="padding:4px 16px 6px;font-size:11px;color:#a1a1aa;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;">Category</div>
+          <div class="d7-cats-scroll">
+            <div class="d7-cat-tile">
+              <div class="d7-cat-circle d7-cat-selected" style="background:#22c55e22;"><div style="width:20px;height:20px;border-radius:50%;background:#22c55e;"></div></div>
+              <div class="d7-cat-name" style="color:#22c55e;font-weight:600;">Groceries</div>
+            </div>
+            <div class="d7-cat-tile">
+              <div class="d7-cat-circle" style="background:#f9731622;"><div style="width:20px;height:20px;border-radius:50%;background:#f97316;"></div></div>
+              <div class="d7-cat-name">Eat out</div>
+            </div>
+            <div class="d7-cat-tile">
+              <div class="d7-cat-circle" style="background:#3b82f622;"><div style="width:20px;height:20px;border-radius:50%;background:#3b82f6;"></div></div>
+              <div class="d7-cat-name">Transport</div>
+            </div>
+            <div class="d7-cat-tile">
+              <div class="d7-cat-circle" style="background:#a855f722;"><div style="width:20px;height:20px;border-radius:50%;background:#a855f7;"></div></div>
+              <div class="d7-cat-name">Leisure</div>
+            </div>
+            <div class="d7-cat-tile">
+              <div class="d7-cat-circle" style="background:#f4f4f5;"><div style="width:20px;height:20px;border-radius:50%;background:#e4e4e7;"></div></div>
+              <div class="d7-cat-name" style="color:#a1a1aa;">More</div>
+            </div>
+          </div>
+          <div class="d7-amount-row">
+            <div class="d7-amount-label">Amount</div>
+            <div class="d7-amount-input">
+              <span class="d7-amount-currency">CHF</span>
+              <span>22.3</span><span class="d7-amount-cursor"></span>
+            </div>
+          </div>
+          <div class="d7-remarks-row">
+            <div class="d7-remarks-input">Migros</div>
+          </div>
+          <div class="d7-save-btn">Save</div>
+        </div>
+      </div>
+    </div>
+    <div class="selection-panel">
+      <div class="selection-label">Strengths</div>
+      <p style="font-size:12px;color:#71717a;line-height:1.5;">Bottom sheet keeps dashboard context visible behind. Category tiles are thumb-sized. Live amount with cursor feels native. One-tap category selection.</p>
+    </div>
+  </div>
+
+  <!-- ── Direction 8: Dark Quick-Add Sheet ── -->
+  <div class="direction-card">
+    <div class="direction-label">
+      <h2>Direction 8 — Dark Quick-Add Sheet</h2>
+      <p>Direction 7 in dark mode. Low-light friendly, indigo accents glow.</p>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen d8-screen">
+        <div class="status-bar status-bar-dark">
+          <span>9:41</span>
+          <span style="font-size:10px;color:#3f3f46;">● synced</span>
+        </div>
+        <!-- Dimmed dark dashboard behind sheet -->
+        <div style="opacity:0.25;padding:12px;">
+          <div style="background:#18181b;border-radius:12px;padding:14px;">
+            <div style="font-size:11px;color:#52525b;">May 2026</div>
+            <div style="font-size:32px;font-weight:700;color:#f4f4f5;">CHF 2,480</div>
+          </div>
+        </div>
+        <!-- Dark bottom sheet -->
+        <div class="d8-sheet">
+          <div class="d8-handle"></div>
+          <div class="d8-sheet-title">New expense</div>
+          <div class="d8-date-chip">📅 Today, 8 May</div>
+          <div style="padding:4px 16px 6px;font-size:11px;color:#52525b;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;">Category</div>
+          <div class="d8-cats-scroll">
+            <div class="d8-cat-tile">
+              <div class="d8-cat-circle d8-cat-selected" style="background:#15803d33;"><div style="width:20px;height:20px;border-radius:50%;background:#22c55e;"></div></div>
+              <div class="d8-cat-name" style="color:#4ade80;">Groceries</div>
+            </div>
+            <div class="d8-cat-tile">
+              <div class="d8-cat-circle" style="background:#c2410c33;"><div style="width:20px;height:20px;border-radius:50%;background:#f97316;"></div></div>
+              <div class="d8-cat-name">Eat out</div>
+            </div>
+            <div class="d8-cat-tile">
+              <div class="d8-cat-circle" style="background:#1d4ed833;"><div style="width:20px;height:20px;border-radius:50%;background:#3b82f6;"></div></div>
+              <div class="d8-cat-name">Transport</div>
+            </div>
+            <div class="d8-cat-tile">
+              <div class="d8-cat-circle" style="background:#7e22ce33;"><div style="width:20px;height:20px;border-radius:50%;background:#a855f7;"></div></div>
+              <div class="d8-cat-name">Leisure</div>
+            </div>
+          </div>
+          <div class="d8-amount-row">
+            <div class="d8-amount-label">Amount</div>
+            <div class="d8-amount-input">
+              <span class="d8-amount-currency">CHF</span>
+              <span>22.30</span>
+            </div>
+          </div>
+          <div class="d8-remarks">Migros</div>
+          <div class="d8-save-btn">Save</div>
+        </div>
+      </div>
+    </div>
+    <div class="selection-panel">
+      <div class="selection-label">Strengths</div>
+      <p style="font-size:12px;color:#71717a;line-height:1.5;">Dark quick-add for late-night or low-light logging. Category circles with tinted backgrounds pop clearly. Indigo save button anchors the action.</p>
+    </div>
+  </div>
+
+</div>
+
+<div style="background:white;border-top:1px solid #e4e4e7;padding:32px 40px;margin-top:8px;">
+  <h2 style="font-size:18px;font-weight:700;color:#18181b;margin-bottom:8px;">Evaluation Guide</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px;">
+    <div style="background:#f9fafb;border-radius:10px;padding:14px;">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px;">QUICK-ADD CONTEXT</div>
+      <p style="font-size:13px;color:#71717a;line-height:1.5;">Which direction lets you reach the add form fastest? Directions 2, 7, and 8 prioritize immediate capture. Directions 1, 3, 4, 5, 6 require one extra tap via FAB.</p>
+    </div>
+    <div style="background:#f9fafb;border-radius:10px;padding:14px;">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px;">MONTHLY REVIEW CONTEXT</div>
+      <p style="font-size:13px;color:#71717a;line-height:1.5;">Directions 6 makes the drill-down most obvious. Directions 1, 3, 4 emphasize the total + breakdown. Direction 5 emphasizes the raw list.</p>
+    </div>
+    <div style="background:#f9fafb;border-radius:10px;padding:14px;">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px;">LIGHT / DARK</div>
+      <p style="font-size:13px;color:#71717a;line-height:1.5;">Directions 3 and 8 show the dark theme. All others are light. The final design supports both — pick the light-mode direction you prefer.</p>
+    </div>
+    <div style="background:#f9fafb;border-radius:10px;padding:14px;">
+      <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px;">MIX AND MATCH</div>
+      <p style="font-size:13px;color:#71717a;line-height:1.5;">You can combine elements. E.g. Dir 6's category list + Dir 7's add sheet is a common and strong combination.</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
