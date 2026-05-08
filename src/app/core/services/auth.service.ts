@@ -1,28 +1,225 @@
-import { Injectable, signal, Signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { NotificationService } from './notification.service';
+import { environment } from '../../../environments/environment';
+import type { GisClientConfigError, GisTokenClient, GisTokenResponse } from '../models/gis.types';
 
 export interface AuthUser {
   accessToken: string;
   expiresAt: number;
 }
 
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const SILENT_REFRESH_TIMEOUT_MS = 10_000;
+const SESSION_EXPIRY_KEY = 'auth_session_expiry';
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  readonly isAuthenticated: Signal<boolean> = signal(false);
-  readonly user: Signal<AuthUser | null> = signal(null);
+  private readonly notification = inject(NotificationService);
+  private readonly router = inject(Router);
+
+  private readonly _user = signal<AuthUser | null>(null);
+  private tokenClient: GisTokenClient | null = null;
+  private _loadGisScriptPromise: Promise<void> | null = null;
+
+  private _isSignInContext = false;
+  private _pendingCallbacks: { resolve: () => void; reject: (err: Error) => void } | null = null;
+
+  readonly isAuthenticated = computed(
+    () => !!this._user() && this._user()!.expiresAt > Date.now(),
+  );
 
   async init(): Promise<void> {
-    // Implemented in Story 1.2
+    try {
+      if (!environment.googleClientId) return;
+
+      // AC3: skip GIS round-trip when we know the previous session already expired
+      const storedExpiry = Number(sessionStorage.getItem(SESSION_EXPIRY_KEY));
+      if (storedExpiry && storedExpiry <= Date.now()) {
+        sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+        return;
+      }
+
+      await this.loadGisScript();
+      this.setupTokenClient();
+      await this.attemptSilentRefresh();
+    } catch {
+      // init() must never reject — auth failure handled by authGuard redirecting to /auth
+    }
   }
 
   async signIn(): Promise<void> {
-    throw new Error('Not implemented — Story 1.2');
+    if (!environment.googleClientId) {
+      throw new Error('Google Client ID is not configured.');
+    }
+    if (!this.tokenClient) {
+      await this.loadGisScript();
+      this.setupTokenClient();
+    }
+    // Abort any in-flight silent refresh to free the _pendingCallbacks slot
+    if (this._pendingCallbacks) {
+      this._pendingCallbacks.resolve();
+      this._pendingCallbacks = null;
+    }
+    this._isSignInContext = true;
+    await this.requestToken({ prompt: 'consent' });
   }
 
-  async signOut(): Promise<void> {
-    throw new Error('Not implemented — Story 1.2');
+  signOut(): void {
+    this._user.set(null);
+    sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+    this.router.navigate(['/auth']);
   }
 
   getAccessToken(): string | null {
-    return null;
+    const user = this._user();
+    if (!user || user.expiresAt <= Date.now()) return null;
+    return user.accessToken;
+  }
+
+  private loadGisScript(): Promise<void> {
+    if (this._loadGisScriptPromise) return this._loadGisScriptPromise;
+    this._loadGisScriptPromise = new Promise((resolve, reject) => {
+      if (window.google?.accounts?.oauth2) {
+        resolve();
+        return;
+      }
+      const existing = document.querySelector<HTMLScriptElement>(
+        `script[src="${environment.gisScriptUrl}"]`,
+      );
+      if (existing) {
+        // Script tag exists — check if it already finished loading
+        if (window.google?.accounts?.oauth2) {
+          resolve();
+          return;
+        }
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener(
+          'error',
+          () => reject(new Error('GIS script failed to load')),
+          { once: true },
+        );
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = environment.gisScriptUrl;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('GIS script failed to load'));
+      document.head.appendChild(script);
+    });
+    return this._loadGisScriptPromise;
+  }
+
+  private setupTokenClient(): void {
+    if (!window.google?.accounts?.oauth2?.initTokenClient) {
+      throw new Error('GIS OAuth2 API unavailable after script load');
+    }
+    this.tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: environment.googleClientId,
+      scope: SHEETS_SCOPE,
+      callback: (response: GisTokenResponse) => this.handleTokenResponse(response),
+      error_callback: (error: GisClientConfigError) => this.handleErrorCallback(error),
+    });
+  }
+
+  private attemptSilentRefresh(): Promise<void> {
+    const client = this.tokenClient;
+    if (!client) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        this._pendingCallbacks = null;
+        resolve();
+      }, SILENT_REFRESH_TIMEOUT_MS);
+
+      // reject is intentionally wired to resolve — silent refresh never fails the boot chain
+      this._pendingCallbacks = {
+        resolve: () => { clearTimeout(timeoutId); resolve(); },
+        reject: () => { clearTimeout(timeoutId); resolve(); },
+      };
+
+      this._isSignInContext = false;
+      client.requestAccessToken({ prompt: '' });
+    });
+  }
+
+  private requestToken(options: { prompt?: string }): Promise<void> {
+    const client = this.tokenClient;
+    if (!client) {
+      return Promise.reject(new Error('Token client not initialized'));
+    }
+    return new Promise((resolve, reject) => {
+      this._pendingCallbacks = { resolve, reject };
+      client.requestAccessToken(options);
+    });
+  }
+
+  private handleTokenResponse(response: GisTokenResponse): void {
+    const callbacks = this._pendingCallbacks;
+    const wasSignInContext = this._isSignInContext;
+    this._pendingCallbacks = null;
+    this._isSignInContext = false;
+
+    if (response.error) {
+      if (wasSignInContext) {
+        this.notification.showError({ type: 'AUTH_DENIED' });
+        sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+        callbacks?.reject(new Error('Sheets access is required to use this app.'));
+      } else {
+        callbacks?.resolve();
+      }
+      return;
+    }
+
+    const exp = parseInt(response.expires_in, 10);
+    if (!isFinite(exp) || exp <= 0) {
+      callbacks?.reject(new Error('Invalid token expiry in Google response'));
+      return;
+    }
+    if (!response.access_token) {
+      callbacks?.reject(new Error('Missing access token in Google response'));
+      return;
+    }
+
+    const expiresAt = Date.now() + exp * 1000;
+    this._user.set({ accessToken: response.access_token, expiresAt });
+    sessionStorage.setItem(SESSION_EXPIRY_KEY, String(expiresAt));
+
+    if (wasSignInContext) {
+      this.router.navigate(['/']).catch(() => {});
+    }
+
+    callbacks?.resolve();
+  }
+
+  private handleErrorCallback(error: GisClientConfigError): void {
+    const callbacks = this._pendingCallbacks;
+    const wasSignInContext = this._isSignInContext;
+    this._pendingCallbacks = null;
+    this._isSignInContext = false;
+
+    if (!wasSignInContext) {
+      // Silent refresh failure — resolve quietly, not a boot error
+      callbacks?.resolve();
+      return;
+    }
+
+    let message: string;
+    if (error.type === 'popup_closed') {
+      this.notification.showError({ type: 'AUTH_DENIED' });
+      message = 'Sheets access is required to use this app.';
+    } else if (error.type === 'popup_failed_to_open') {
+      this.notification.showError({ type: 'NETWORK', message: 'Please allow popups for this site.' });
+      message = 'Please allow popups for this site.';
+    } else {
+      this.notification.showError({
+        type: 'NETWORK',
+        message: 'Network error during sign-in. Check your connection and try again.',
+      });
+      message = 'Network error during sign-in. Check your connection and try again.';
+    }
+
+    callbacks?.reject(new Error(message));
   }
 }

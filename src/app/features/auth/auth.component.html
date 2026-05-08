@@ -1,1 +1,28 @@
-<div>Auth — implemented in Story 1.2</div>
+<div class="auth-container">
+  <div class="auth-card">
+    <h1 class="auth-title">Expense Dashboard</h1>
+    <p class="auth-subtitle">Sign in to access your Google Sheets expense data</p>
+
+    <button
+      mat-raised-button
+      color="primary"
+      class="sign-in-btn"
+      [disabled]="isLoading()"
+      (click)="onSignIn()"
+    >
+      @if (isLoading()) {
+        <mat-spinner diameter="20" class="btn-spinner"></mat-spinner>
+        <span>Signing in…</span>
+      } @else {
+        <span>Sign in with Google</span>
+      }
+    </button>
+
+    @if (errorMessage()) {
+      <div class="error-message" role="alert">
+        <p>{{ errorMessage() }}</p>
+        <button mat-button color="warn" (click)="onSignIn()">Try again</button>
+      </div>
+    }
+  </div>
+</div>
