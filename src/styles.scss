@@ -31,21 +31,21 @@ body {
 
 // CSS custom property defaults — category colors populated by CategoriesService at runtime
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --card: #f8fafc;
-  --border: #e2e8f0;
-  --muted: #94a3b8;
-  --accent: #6366f1;
+  --background: #fafafa;  /* zinc-50 */
+  --foreground: #18181b;  /* zinc-900 */
+  --card: #ffffff;
+  --border: #e4e4e7;      /* zinc-200 */
+  --muted: #71717a;       /* zinc-500 */
+  --accent: #4f46e5;      /* indigo-600 */
 }
 
 .dark {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --card: #1e293b;
-  --border: #334155;
-  --muted: #64748b;
-  --accent: #818cf8;
+  --background: #09090b;  /* zinc-950 */
+  --foreground: #fafafa;  /* zinc-50 */
+  --card: #18181b;        /* zinc-900 */
+  --border: #27272a;      /* zinc-800 */
+  --muted: #a1a1aa;       /* zinc-400 */
+  --accent: #818cf8;      /* indigo-400 */
 }
 
 @media (prefers-reduced-motion: reduce) {

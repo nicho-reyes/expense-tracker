@@ -1,0 +1,22 @@
+<nav class="flex justify-around items-center h-16 border-t"
+     aria-label="Main navigation"
+     style="background-color: var(--card); border-color: var(--border); padding-bottom: env(safe-area-inset-bottom);">
+  <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}"
+     class="flex flex-col items-center gap-0.5 min-w-[44px] min-h-[44px] justify-center"
+     aria-label="Dashboard">
+    <mat-icon class="nav-icon">dashboard</mat-icon>
+    <span class="text-xs">Dashboard</span>
+  </a>
+  <a routerLink="/entries" routerLinkActive="active"
+     class="flex flex-col items-center gap-0.5 min-w-[44px] min-h-[44px] justify-center"
+     aria-label="Entries">
+    <mat-icon class="nav-icon">receipt_long</mat-icon>
+    <span class="text-xs">Entries</span>
+  </a>
+  <a routerLink="/settings" routerLinkActive="active"
+     class="flex flex-col items-center gap-0.5 min-w-[44px] min-h-[44px] justify-center"
+     aria-label="Settings">
+    <mat-icon class="nav-icon">settings</mat-icon>
+    <span class="text-xs">Settings</span>
+  </a>
+</nav>

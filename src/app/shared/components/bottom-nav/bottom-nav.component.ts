@@ -1,10 +1,13 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { RouterLink, RouterLinkActive } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
 
 @Component({
   selector: 'app-bottom-nav',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [],
-  template: `<ng-content />`,
+  imports: [RouterLink, RouterLinkActive, MatIconModule],
+  templateUrl: './bottom-nav.component.html',
+  styleUrl: './bottom-nav.component.scss',
 })
-export class UbottomUnavComponent {}
+export class BottomNavComponent {}

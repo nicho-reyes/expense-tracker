@@ -1,0 +1,15 @@
+.active {
+  color: var(--accent);
+
+  .nav-icon {
+    color: var(--accent);
+  }
+}
+
+a:not(.active) {
+  color: var(--muted);
+
+  .nav-icon {
+    color: var(--muted);
+  }
+}

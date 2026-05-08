@@ -5,6 +5,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [],
-  template: `<ng-content />`,
+  templateUrl: './sync-status-bar.component.html',
+  styleUrl: './sync-status-bar.component.scss',
 })
-export class UsyncUstatusUbarComponent {}
+export class SyncStatusBarComponent {}
