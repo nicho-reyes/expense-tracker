@@ -428,7 +428,7 @@ Nice-to-have tier (R1, R2, F1 in particular) is cuttable under time pressure wit
 ### First-Run & Setup
 
 - **FR47:** On first launch, the app guides the user through Google authentication and Sheets access approval
-- **FR48:** The app automatically connects to the user's expense Sheet without manual configuration
+- **FR48:** The user provides their Google Sheet URL or spreadsheet ID once on first launch; the app persists the connection to `appMeta` IDB and reconnects automatically on all subsequent sessions without requiring manual re-entry
 - **FR54:** After completing authentication on first launch, the app confirms the connected Sheet name before loading data
 
 ## Non-Functional Requirements

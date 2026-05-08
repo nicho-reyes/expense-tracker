@@ -499,10 +499,9 @@ flowchart TD
     B --> C[Google OAuth consent\nSheets read/write scope]
     C --> D{Auth successful?}
     D -- No / cancelled --> B
-    D -- Yes --> E[Sheet discovery\nScanning Google Drive]
-    E --> F{Sheet found?}
-    F -- Yes --> G[Confirm connection screen\nShows discovered sheet name]
-    F -- No match --> H[Manual fallback\nEnter spreadsheet URL] --> G
+    D -- Yes --> E[Sheet setup screen\nEnter Google Sheet URL or ID]
+    E --> F[App validates spreadsheet\nChecks access and schema]
+    F --> G[Confirm connection screen\nShows spreadsheet name]
     G --> I[User taps Connect]
     I --> J[Schema validation\nReads header row of active tab]
     J --> K{Schema valid?}
@@ -515,8 +514,8 @@ flowchart TD
 ```
 
 **UX optimisations:**
-- No multi-step wizard — auth → discovery → confirm → done is the entire flow
-- Sheet name shown before connecting — never auto-connects silently
+- No multi-step wizard — auth → URL entry → confirm → done is the entire flow
+- Sheet name shown before connecting — user always confirms before the app reads any data
 - Category colour assignment is prompted but not required; can be done later
 - First entry is the true "setup complete" moment; colour prompt is a nudge, not a gate
 
