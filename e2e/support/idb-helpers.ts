@@ -73,3 +73,37 @@ export async function idbGetAuth(page: Page): Promise<unknown> {
     }),
   );
 }
+
+export async function idbPutAppMeta(page: Page, key: string, value: unknown): Promise<void> {
+  await page.evaluate(
+    ({ key, value }) =>
+      new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open('expense-dashboard', 1);
+        req.onsuccess = () => {
+          const tx = req.result.transaction('appMeta', 'readwrite');
+          const putReq = tx.objectStore('appMeta').put(value, key);
+          putReq.onsuccess = () => resolve();
+          putReq.onerror = () => reject(putReq.error);
+        };
+        req.onerror = () => reject(req.error);
+      }),
+    { key, value },
+  );
+}
+
+export async function idbGetAppMeta<T>(page: Page, key: string): Promise<T | undefined> {
+  return page.evaluate(
+    (k) =>
+      new Promise<unknown>((resolve, reject) => {
+        const req = indexedDB.open('expense-dashboard', 1);
+        req.onsuccess = () => {
+          const tx = req.result.transaction('appMeta', 'readonly');
+          const getReq = tx.objectStore('appMeta').get(k);
+          getReq.onsuccess = () => resolve(getReq.result);
+          getReq.onerror = () => reject(getReq.error);
+        };
+        req.onerror = () => reject(req.error);
+      }),
+    key,
+  ) as Promise<T | undefined>;
+}

@@ -1,6 +1,24 @@
 import { z } from 'zod';
 import { AppError } from './error.model';
 
+export const YEAR_TAB_PATTERN = /^\d{4}$/;
+
+export interface HydratedTabRecord {
+  lastHydratedAt: number;
+  rowCount: number;
+}
+
+export type HydrationProgress =
+  | { type: 'idle' }
+  | { type: 'running'; tabName: string; tabIndex: number; tabTotal: number }
+  | { type: 'complete'; hydratedTabs: number; skippedTabs: number; deferredTabs: number };
+
+export type HydrationTabResult =
+  | { type: 'hydrated'; tabName: string; rowCount: number }
+  | { type: 'skipped'; tabName: string; reason: 'non-2026-schema' | 'already-hydrated' }
+  | { type: 'invalid'; tabName: string; error: AppError }
+  | { type: 'deferred'; tabName: string; error: AppError };
+
 export const SCHEMA_2026_HEADERS = ['Date', 'Category', 'Amount', 'Remarks', 'Month', 'UUID'];
 export const SCHEMA_2025_HEADERS = ['Date', 'Category', 'Amount', 'Remarks'];
 

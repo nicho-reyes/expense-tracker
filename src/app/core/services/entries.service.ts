@@ -41,17 +41,25 @@ export class EntriesService {
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
       try {
-        const all = await this.idb.getAll('entries');
-        this._entries.set(all);
-      } catch (err) {
-        const appErr = this.toIdbError(err);
-        this.notification.showError(appErr);
-        // Do not rethrow — boot must continue with empty list
+        await this.refreshFromIdb();
+      } catch {
+        // refreshFromIdb already notifies; do not rethrow — boot must continue
       } finally {
         this._initialized.set(true);
       }
     })();
     return this.initPromise;
+  }
+
+  async refreshFromIdb(): Promise<void> {
+    try {
+      const all = await this.idb.getAll('entries');
+      this._entries.set(all);
+    } catch (err) {
+      const appErr = this.toIdbError(err);
+      this.notification.showError(appErr);
+      throw appErr;
+    }
   }
 
   async add(input: NewEntryInput): Promise<LocalEntry> {

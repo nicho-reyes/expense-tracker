@@ -16,6 +16,7 @@ import { CategoriesService } from './core/services/categories.service';
 import { ConfigService } from './core/services/config.service';
 import { EntriesService } from './core/services/entries.service';
 import { SyncQueueService } from './core/services/sync-queue.service';
+import { HydrationService } from './core/services/hydration.service';
 import { provideServiceWorker } from '@angular/service-worker';
 
 export const appConfig: ApplicationConfig = {
@@ -31,9 +32,9 @@ export const appConfig: ApplicationConfig = {
     }),
     {
       provide: APP_INITIALIZER,
-      useFactory: (config: ConfigService, auth: AuthService, categories: CategoriesService, entries: EntriesService, syncQueue: SyncQueueService) =>
-        () => config.load().then(() => auth.init()).then(() => categories.init()).then(() => entries.init()).then(() => syncQueue.init()),
-      deps: [ConfigService, AuthService, CategoriesService, EntriesService, SyncQueueService],
+      useFactory: (config: ConfigService, auth: AuthService, categories: CategoriesService, entries: EntriesService, syncQueue: SyncQueueService, hydration: HydrationService) =>
+        () => config.load().then(() => auth.init()).then(() => categories.init()).then(() => entries.init()).then(() => syncQueue.init()).then(() => hydration.init()),
+      deps: [ConfigService, AuthService, CategoriesService, EntriesService, SyncQueueService, HydrationService],
       multi: true,
     },
   ],

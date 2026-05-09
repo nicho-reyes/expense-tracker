@@ -7,6 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { firstValueFrom } from 'rxjs';
 import { SheetsService } from '../../core/services/sheets.service';
+import { HydrationService } from '../../core/services/hydration.service';
 import { NotificationService } from '../../core/services/notification.service';
 import { AppError } from '../../core/models/error.model';
 import { SheetsSheetMeta, TabSchemaResult } from '../../core/models/sheets.model';
@@ -23,6 +24,7 @@ type SetupStep = 'input' | 'validating' | 'confirm';
 })
 export class SetupComponent {
   private readonly sheets = inject(SheetsService);
+  private readonly hydration = inject(HydrationService);
   private readonly router = inject(Router);
   private readonly notification = inject(NotificationService);
 
@@ -112,6 +114,7 @@ export class SetupComponent {
       }
 
       await this.sheets.connectSheet(this.pendingSpreadsheetId, schemaCache);
+      await this.hydration.hydrate({ force: false });
       await this.router.navigate(['/']);
     } catch (err) {
       this.errorMessage.set(this.mapError(err as AppError));

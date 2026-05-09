@@ -433,4 +433,163 @@ describe('SheetsService', () => {
       });
     });
   });
+
+  // ── listYearTabs() ────────────────────────────────────────────────────────
+
+  describe('listYearTabs()', () => {
+    it('returns only tabs whose title matches /^\\d{4}$/', async () => {
+      httpSpy.get.mockReturnValue(of({
+        spreadsheetId: 'sid',
+        properties: { title: 'Expenses' },
+        sheets: [
+          { properties: { sheetId: 1, title: '2026', index: 0, sheetType: 'GRID', gridProperties: { rowCount: 100, columnCount: 6 } } },
+          { properties: { sheetId: 2, title: 'Categories', index: 1, sheetType: 'GRID', gridProperties: { rowCount: 50, columnCount: 4 } } },
+          { properties: { sheetId: 3, title: '2025', index: 2, sheetType: 'GRID', gridProperties: { rowCount: 100, columnCount: 4 } } },
+          { properties: { sheetId: 4, title: 'Summary', index: 3, sheetType: 'GRID', gridProperties: { rowCount: 10, columnCount: 10 } } },
+        ],
+      }));
+
+      const result = await service.listYearTabs('sid');
+
+      expect(result.map(t => t.properties.title)).toEqual(['2026', '2025']);
+    });
+
+    it('returns empty array when no year-pattern tabs exist', async () => {
+      httpSpy.get.mockReturnValue(of({
+        spreadsheetId: 'sid',
+        properties: { title: 'Expenses' },
+        sheets: [
+          { properties: { sheetId: 1, title: 'Categories', index: 0, sheetType: 'GRID', gridProperties: { rowCount: 50, columnCount: 4 } } },
+        ],
+      }));
+
+      const result = await service.listYearTabs('sid');
+
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  // ── readTabDataRows() ─────────────────────────────────────────────────────
+
+  describe('readTabDataRows()', () => {
+    it('requests A2:F range skipping header row', async () => {
+      httpSpy.get.mockReturnValue(of({ range: "'2026'!A2:F", majorDimension: 'ROWS', values: [] }));
+
+      await firstValueFrom(service.readTabDataRows('sid', '2026'));
+
+      const url: string = httpSpy.get.mock.calls[0][0];
+      expect(url).toContain(encodeURIComponent("'2026'!A2:F"));
+    });
+
+    it('returns empty array when Sheets API response has no values', async () => {
+      httpSpy.get.mockReturnValue(of({ range: "'2026'!A2:F", majorDimension: 'ROWS' }));
+
+      const rows = await firstValueFrom(service.readTabDataRows('sid', '2026'));
+
+      expect(rows).toEqual([]);
+    });
+
+    it('maps HTTP 429 to AppError.SHEETS_API with quota message', async () => {
+      httpSpy.get.mockReturnValue(throwError(() => ({ status: 429, message: 'Too Many Requests' })));
+
+      await expect(firstValueFrom(service.readTabDataRows('sid', '2026'))).rejects.toMatchObject({
+        type: 'SHEETS_API',
+        status: 429,
+        message: expect.stringContaining('quota'),
+      });
+    });
+
+    it('maps HTTP 503 to AppError.SHEETS_API with generic message', async () => {
+      httpSpy.get.mockReturnValue(throwError(() => ({ status: 503, message: 'Service Unavailable' })));
+
+      await expect(firstValueFrom(service.readTabDataRows('sid', '2026'))).rejects.toMatchObject({
+        type: 'SHEETS_API',
+        status: 503,
+      });
+    });
+  });
+
+  // ── mapRowToLocalEntry() ──────────────────────────────────────────────────
+
+  describe('mapRowToLocalEntry()', () => {
+    it('maps a fully populated 2026 row using column-F UUID as id', () => {
+      const row = ['2026-05-01', 'Food', '12.5', 'Lunch', '2026-05', 'some-uuid-value'];
+      const entry = service.mapRowToLocalEntry('2026', 2, row);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.id).toBe('some-uuid-value');
+      expect(entry!.date).toBe('2026-05-01');
+      expect(entry!.category).toBe('Food');
+      expect(entry!.amount).toBe(12.5);
+      expect(entry!.remarks).toBe('Lunch');
+      expect(entry!.month).toBe('2026-05');
+      expect(entry!.year).toBe(2026);
+      expect(entry!.tabName).toBe('2026');
+      expect(entry!.schemaVersion).toBe('2026');
+      expect(entry!.sheetRowIndex).toBe(2);
+      expect(entry!.syncStatus).toBe('synced');
+      expect(entry!.isReadOnly).toBe(false);
+    });
+
+    it('uses deterministic id hydrated-<tab>-<row> when column-F is empty', () => {
+      const row = ['2026-05-01', 'Food', '12.5', 'Lunch', '2026-05', ''];
+      const entry = service.mapRowToLocalEntry('2026', 5, row);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.id).toBe('hydrated-2026-5');
+    });
+
+    it('uses deterministic id when column-F is whitespace', () => {
+      const row = ['2026-05-01', 'Food', '12.5', 'Lunch', '2026-05', '   '];
+      const entry = service.mapRowToLocalEntry('2026', 3, row);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.id).toBe('hydrated-2026-3');
+    });
+
+    it('derives month from date when column-E is empty', () => {
+      const row = ['2026-03-15', 'Transport', '5.0', '', '', ''];
+      const entry = service.mapRowToLocalEntry('2026', 2, row);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.month).toBe('2026-03');
+    });
+
+    it('returns null for malformed amount (non-numeric)', () => {
+      const row = ['2026-05-01', 'Food', 'not-a-number', 'Lunch', '2026-05', ''];
+      const entry = service.mapRowToLocalEntry('2026', 2, row);
+
+      expect(entry).toBeNull();
+    });
+
+    it('returns null for empty amount', () => {
+      const row = ['2026-05-01', 'Food', '', 'Lunch', '2026-05', ''];
+      const entry = service.mapRowToLocalEntry('2026', 2, row);
+
+      expect(entry).toBeNull();
+    });
+
+    it('returns null for malformed date', () => {
+      const row = ['05/01/2026', 'Food', '10', 'Lunch', '2026-05', ''];
+      const entry = service.mapRowToLocalEntry('2026', 2, row);
+
+      expect(entry).toBeNull();
+    });
+
+    it('returns null for empty category', () => {
+      const row = ['2026-05-01', '', '10', 'Lunch', '2026-05', ''];
+      const entry = service.mapRowToLocalEntry('2026', 2, row);
+
+      expect(entry).toBeNull();
+    });
+
+    it('handles short row (fewer than 6 columns) via padding', () => {
+      const row = ['2026-05-01', 'Food', '10'];
+      const entry = service.mapRowToLocalEntry('2026', 2, row);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.id).toBe('hydrated-2026-2');
+      expect(entry!.month).toBe('2026-05');
+    });
+  });
 });

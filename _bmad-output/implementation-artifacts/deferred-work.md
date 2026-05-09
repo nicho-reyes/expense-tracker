@@ -86,3 +86,11 @@
 - Concurrent `init()` calls: both callers read IDB before either sets `_isRefreshInProgress`, so two callers can both enter `attemptBootSilentReauth()` before the guard fires — single-tab assumption (NFR-S2) makes this theoretical; add an init-level mutex if multi-tab sync is ever needed. [auth.service.ts:init]
 - E2E IDB seeds use hard-coded `version: 1` — pre-existing pattern; if `IdbService.DB_VERSION` is ever bumped without creating a version-1 schema first, `onupgradeneeded` won't fire in tests, causing `objectStore('appMeta')` to throw. [e2e/support/idb-helpers.ts, e2e/auth.spec.ts]
 - Spec `AppError` variant count says "9→10" but actual union has more variants (Stories 5.3 added `CATEGORY_IN_USE` and `CATEGORY_NAME_DUPLICATE`) — doc drift in the story spec; update architecture.md variant count in a docs-sync story. [_bmad-output/implementation-artifacts/2-7-persistent-auth-and-boot-time-silent-reauth.md:Dev Notes]
+
+## Deferred from: code review of 2-6-multi-year-entry-hydration-on-first-sheet-connect (2026-05-10)
+
+- `refreshFromIdb()` called once per tab in hydration loop — O(N tabs) full IDB scans; spec-intended "once per tab to merge into the live signal" per Dev Notes. Optimize to single post-loop call when performance profiling warrants it. [hydration.service.ts:~90]
+- Tabs absent from `schemaCache` skipped with reason `'non-2026-schema'` — design intent: only confirmed-2026 tabs are hydrated; newly-added tabs picked up on next manual re-sync (Epic 3). Consider adding `'unknown-schema'` reason variant when Epic 3 ships. [hydration.service.ts:~50]
+- `listYearTabs()` / `fetchSpreadsheetMeta()` 429 produces generic error instead of explicit quota message — `readTabDataRows()` has the 429-specific path; `fetchSpreadsheetMeta` uses a different error-mapping branch. Address when rate-limit resilience is tackled in Epic 3. [sheets.service.ts:~263]
+- E2E helpers hardcode `'expense-dashboard'` / version `1` — currently correct; export `DB_NAME`/`DB_VERSION` constants from `idb.service.ts` when DB version bumps. [e2e/support/idb-helpers.ts]
+- Schema version mismatch mid-hydration undetectable — tab cached as '2026' in `schemaCache` but Sheet headers changed; individual row validation in `mapRowToLocalEntry` provides partial protection. Story 3.6 adds proper schema re-validation. [hydration.service.ts:~44]

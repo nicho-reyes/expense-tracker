@@ -17,6 +17,7 @@ import {
   schema2025Validator,
   schema2026PartialValidator,
   SCHEMA_2026_HEADERS,
+  YEAR_TAB_PATTERN,
 } from '../models/sheets.model';
 
 @Injectable({ providedIn: 'root' })
@@ -257,6 +258,60 @@ export class SheetsService {
       }),
       map(() => void 0),
     );
+  }
+
+  async listYearTabs(spreadsheetId: string): Promise<SheetsSheetMeta[]> {
+    const meta = await firstValueFrom(this.fetchSpreadsheetMeta(spreadsheetId));
+    return (meta?.sheets ?? []).filter((s) => YEAR_TAB_PATTERN.test(s.properties.title));
+  }
+
+  readTabDataRows(spreadsheetId: string, tabName: string): Observable<string[][]> {
+    const escapedTabName = tabName.replace(/'/g, "''");
+    const range = encodeURIComponent(`'${escapedTabName}'!A2:F`);
+    const url = `${environment.sheetsApiBaseUrl}/${spreadsheetId}/values/${range}`;
+    return this.http.get<SheetsValueRange>(url).pipe(
+      map((res) => res?.values ?? []),
+      catchError((err: HttpErrorResponse) =>
+        throwError(() => ({
+          type: 'SHEETS_API',
+          status: err.status,
+          message: err.status === 429
+            ? 'Sheets read quota exceeded — hydration deferred for retry.'
+            : `Sheets read error (${err.status}): ${err.message}`,
+        }) satisfies AppError),
+      ),
+    );
+  }
+
+  mapRowToLocalEntry(tabName: string, rowIndex: number, row: string[]): LocalEntry | null {
+    const cells = [row[0] ?? '', row[1] ?? '', row[2] ?? '', row[3] ?? '', row[4] ?? '', row[5] ?? ''];
+    const date = cells[0].trim();
+    const category = cells[1].trim();
+    const amountRaw = cells[2].trim();
+    const amount = Number(amountRaw);
+    if (!Number.isFinite(amount) || amountRaw === '') return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+    if (!category) return null;
+
+    const remarks = cells[3];
+    const month = cells[4].trim() || date.slice(0, 7);
+    const uuid = cells[5].trim();
+    const id = uuid !== '' ? uuid : `hydrated-${tabName}-${rowIndex}`;
+
+    return {
+      id,
+      date,
+      month,
+      year: Number(date.slice(0, 4)),
+      category,
+      amount,
+      remarks,
+      tabName,
+      schemaVersion: '2026',
+      sheetRowIndex: rowIndex,
+      syncStatus: 'synced',
+      isReadOnly: false,
+    };
   }
 
   private async readTabHeaderRow(spreadsheetId: string, tabName: string): Promise<TabSchemaResult> {

@@ -416,4 +416,42 @@ describe('EntriesService', () => {
       expect(syncQueueSpy.enqueue).not.toHaveBeenCalled();
     });
   });
+
+  // ── refreshFromIdb() ─────────────────────────────────────────────────────
+
+  describe('refreshFromIdb()', () => {
+    it('replaces _entries signal with all rows from IDB in stable order', async () => {
+      const hydrated: LocalEntry = {
+        ...ENTRY_A,
+        id: 'hydrated-2026-2',
+        date: '2026-01-01',
+        month: '2026-01',
+        syncStatus: 'synced',
+      };
+      idbSpy.getAll.mockResolvedValue([ENTRY_A, hydrated]);
+
+      await service.refreshFromIdb();
+
+      expect(service.entries()).toEqual([ENTRY_A, hydrated]);
+    });
+
+    it('can be called multiple times without the single-flight guard blocking it', async () => {
+      idbSpy.getAll.mockResolvedValue([ENTRY_A]);
+      await service.refreshFromIdb();
+      idbSpy.getAll.mockResolvedValue([ENTRY_A, ENTRY_B]);
+      await service.refreshFromIdb();
+
+      expect(idbSpy.getAll).toHaveBeenCalledTimes(2);
+      expect(service.entries()).toEqual([ENTRY_A, ENTRY_B]);
+    });
+
+    it('surfaces IDB_ERROR via notification and rethrows on getAll rejection', async () => {
+      idbSpy.getAll.mockRejectedValue({ type: 'IDB_ERROR', message: 'disk full' } satisfies AppError);
+
+      await expect(service.refreshFromIdb()).rejects.toMatchObject({ type: 'IDB_ERROR' });
+      expect(notificationSpy.showError).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'IDB_ERROR' }),
+      );
+    });
+  });
 });

@@ -9,8 +9,10 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { MatBottomSheet } from '@angular/material/bottom-sheet';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { EntriesService } from '../../core/services/entries.service';
 import { CategoriesService } from '../../core/services/categories.service';
+import { HydrationService } from '../../core/services/hydration.service';
 import { EntryDetailSheetComponent } from '../entry-form/entry-detail-sheet.component';
 import { EntryRowComponent } from '../../shared/components/entry-row/entry-row.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
@@ -21,13 +23,14 @@ import { Category } from '../../core/models/category.model';
   selector: 'app-entries-list',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatDividerModule, EntryRowComponent, EmptyStateComponent],
+  imports: [MatDividerModule, MatProgressBarModule, EntryRowComponent, EmptyStateComponent],
   templateUrl: './entries-list.component.html',
   styleUrl: './entries-list.component.scss',
 })
 export class EntriesListComponent {
   private readonly entriesSvc = inject(EntriesService);
   private readonly categoriesSvc = inject(CategoriesService);
+  readonly hydrationSvc = inject(HydrationService);
   private readonly router = inject(Router);
   private readonly bottomSheet = inject(MatBottomSheet);
   private readonly destroyRef = inject(DestroyRef);

@@ -7,8 +7,10 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { EntriesListComponent } from './entries-list.component';
 import { EntriesService } from '../../core/services/entries.service';
 import { CategoriesService } from '../../core/services/categories.service';
+import { HydrationService } from '../../core/services/hydration.service';
 import { LocalEntry } from '../../core/models/entry.model';
 import { Category } from '../../core/models/category.model';
+import { HydrationProgress } from '../../core/models/sheets.model';
 
 function makeEntry(overrides: Partial<LocalEntry>): LocalEntry {
   return {
@@ -34,11 +36,13 @@ describe('EntriesListComponent', () => {
   let fixture: ComponentFixture<EntriesListComponent>;
   let entriesSignal: ReturnType<typeof signal<LocalEntry[]>>;
   let categoriesSignal: ReturnType<typeof signal<Category[]>>;
+  let hydrationProgressSignal: ReturnType<typeof signal<HydrationProgress>>;
   let routerSpy: { navigate: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     entriesSignal = signal<LocalEntry[]>([]);
     categoriesSignal = signal<Category[]>([CAT_FOOD]);
+    hydrationProgressSignal = signal<HydrationProgress>({ type: 'idle' });
 
     routerSpy = { navigate: vi.fn().mockResolvedValue(true) };
 
@@ -48,6 +52,7 @@ describe('EntriesListComponent', () => {
         provideNoopAnimations(),
         { provide: EntriesService, useValue: { entries: entriesSignal } },
         { provide: CategoriesService, useValue: { categories: categoriesSignal } },
+        { provide: HydrationService, useValue: { progress: hydrationProgressSignal } },
         { provide: Router, useValue: routerSpy },
         { provide: MatBottomSheet, useValue: { open: vi.fn(), dismiss: vi.fn() } },
       ],
@@ -123,5 +128,42 @@ describe('EntriesListComponent', () => {
     const container = fixture.debugElement.query(By.css('div[style*="touch-action"]'));
     expect(container).not.toBeNull();
     expect(container.nativeElement.style.touchAction).toBe('pan-y');
+  });
+
+  it('shows progress strip and hides EmptyState when hydration is running (AC5)', () => {
+    entriesSignal.set([]);
+    hydrationProgressSignal.set({ type: 'running', tabName: '2026', tabIndex: 1, tabTotal: 2 });
+    fixture.detectChanges();
+
+    const progressBar = fixture.debugElement.query(By.css('mat-progress-bar'));
+    expect(progressBar).not.toBeNull();
+
+    const progressText = fixture.debugElement.query(By.css('[role="status"]'));
+    expect(progressText).not.toBeNull();
+    expect(progressText.nativeElement.textContent).toContain('Loading 2026 (1 of 2)');
+
+    const emptyState = fixture.debugElement.query(By.css('app-empty-state'));
+    expect(emptyState).toBeNull();
+  });
+
+  it('shows EmptyState when idle and no entries (AC5)', () => {
+    entriesSignal.set([]);
+    hydrationProgressSignal.set({ type: 'idle' });
+    fixture.detectChanges();
+
+    const emptyState = fixture.debugElement.query(By.css('app-empty-state'));
+    expect(emptyState).not.toBeNull();
+
+    const progressBar = fixture.debugElement.query(By.css('mat-progress-bar'));
+    expect(progressBar).toBeNull();
+  });
+
+  it('hides progress strip once hydration completes (AC5)', () => {
+    entriesSignal.set([makeEntry({ id: 'e1' })]);
+    hydrationProgressSignal.set({ type: 'complete', hydratedTabs: 1, skippedTabs: 0, deferredTabs: 0 });
+    fixture.detectChanges();
+
+    const progressBar = fixture.debugElement.query(By.css('mat-progress-bar'));
+    expect(progressBar).toBeNull();
   });
 });
