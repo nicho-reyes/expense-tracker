@@ -1,0 +1,42 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.skeleton {
+  height: 40px;
+  width: 100%;
+  background: var(--color-muted, #d4d4d8);
+  border-radius: 4px;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.canvas-wrapper {
+  height: 40px;
+  width: 100%;
+  position: relative;
+  pointer-events: none;
+
+  canvas {
+    display: block;
+    height: 100% !important;
+    width: 100% !important;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

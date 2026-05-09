@@ -1,0 +1,15 @@
+@if (isLoading()) {
+  <div
+    class="skeleton"
+    aria-hidden="true"></div>
+} @else {
+  <div class="canvas-wrapper">
+    <canvas
+      baseChart
+      [type]="'bar'"
+      [data]="chartData()"
+      [options]="chartOptions">
+    </canvas>
+    <span class="sr-only">{{ srSummary() }}</span>
+  </div>
+}

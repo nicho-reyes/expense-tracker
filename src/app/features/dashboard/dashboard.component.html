@@ -23,7 +23,19 @@
     [month]="selectedMonth()"
     [isLoading]="isLoading()" />
 
-  <!-- Sparkline + KPI row + breakdown bar added in Stories 4.2, 4.3 -->
+  <app-sparkline-chart
+    [data]="monthlyTotals()"
+    [selectedMonth]="selectedMonth()"
+    [isLoading]="isLoading()" />
+
+  <app-kpi-row
+    [selectedMonthTotal]="monthTotal()"
+    [historicalMonthlyTotals]="monthlyTotals()"
+    [selectedMonth]="selectedMonth()"
+    [selectedMonthEntryCount]="selectedMonthEntryCount()"
+    [isLoading]="isLoading()" />
+
+  <!-- Category breakdown bar added in Story 4.3 -->
 </div>
 
 <button

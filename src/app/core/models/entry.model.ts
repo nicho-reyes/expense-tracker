@@ -1,3 +1,9 @@
+export interface MonthlyTotal {
+  month: string;       // YYYY-MM
+  total: number;
+  entryCount: number;
+}
+
 export interface LocalEntry {
   id: string;
   date: string;           // YYYY-MM-DD

@@ -1,0 +1,35 @@
+@if (isLoading()) {
+  <div class="kpi-row">
+    <div class="kpi-card skeleton" aria-hidden="true"></div>
+    <div class="kpi-card skeleton" aria-hidden="true"></div>
+  </div>
+} @else {
+  <div class="kpi-row">
+    <div
+      class="kpi-card"
+      [attr.aria-label]="deltaAriaLabel()">
+      @if (delta() === null || deltaClass() === 'flat') {
+        <span class="kpi-value muted">—</span>
+        <span class="kpi-label">vs avg</span>
+      } @else {
+        <span [class]="'kpi-value ' + deltaClass()">
+          @if (deltaClass() === 'over') {
+            <mat-icon aria-hidden="true" class="kpi-arrow">arrow_upward</mat-icon>
+            +{{ (delta() ?? 0) | chfCurrency }}
+          } @else {
+            <mat-icon aria-hidden="true" class="kpi-arrow">arrow_downward</mat-icon>
+            {{ (delta() ?? 0) | chfCurrency }}
+          }
+        </span>
+        <span class="kpi-label">vs avg</span>
+      }
+    </div>
+
+    <div
+      class="kpi-card"
+      [attr.aria-label]="entryCountAriaLabel()">
+      <span class="kpi-value neutral">{{ selectedMonthEntryCount() }}</span>
+      <span class="kpi-label">{{ selectedMonthEntryCount() === 1 ? 'entry' : 'entries' }}</span>
+    </div>
+  </div>
+}

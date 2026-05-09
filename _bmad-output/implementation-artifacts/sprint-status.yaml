@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08
-last_updated: 2026-05-09T19:00:00Z
+last_updated: 2026-05-09T20:30:00Z
 project: expense-dashboard
 
 project_key: NOKEY
@@ -81,7 +81,7 @@ development_status:
   # Epic 4: Dashboard & Spending Insights
   epic-4: backlog
   4-1-dashboardcomponent-with-monthly-total-and-month-navigation: done
-  4-2-sparklinechartcomponent-and-kpirowcomponent: backlog
+  4-2-sparklinechartcomponent-and-kpirowcomponent: done
   4-3-categorybreakdownbarcomponent: backlog
   4-4-category-month-drill-down-with-drilldownheader: backlog
   epic-4-retrospective: optional

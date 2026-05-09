@@ -1,9 +1,10 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { IdbService } from './idb.service';
 import { NotificationService } from './notification.service';
 import { SheetsService } from './sheets.service';
-import { LocalEntry, NewEntryInput } from '../models/entry.model';
+import { LocalEntry, MonthlyTotal, NewEntryInput } from '../models/entry.model';
 import { AppError } from '../models/error.model';
+import { listLast12Months } from '../../shared/utils/month.util';
 
 @Injectable({ providedIn: 'root' })
 export class EntriesService {
@@ -16,6 +17,18 @@ export class EntriesService {
 
   private readonly _initialized = signal(false);
   readonly isInitialized = this._initialized.asReadonly();
+
+  readonly monthlyTotals = computed<MonthlyTotal[]>(() => {
+    const buckets = new Map<string, MonthlyTotal>();
+    for (const e of this._entries()) {
+      const cur = buckets.get(e.month) ?? { month: e.month, total: 0, entryCount: 0 };
+      cur.total += e.amount;
+      cur.entryCount += 1;
+      buckets.set(e.month, cur);
+    }
+    const last12 = listLast12Months();
+    return last12.map(m => buckets.get(m) ?? { month: m, total: 0, entryCount: 0 });
+  });
 
   readonly selectedMonth = signal<string>('');
   readonly syncStatus = signal<'idle' | 'syncing' | 'error'>('idle');

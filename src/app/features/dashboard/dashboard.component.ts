@@ -13,13 +13,15 @@ import { MatIconModule } from '@angular/material/icon';
 import { QuickAddSheetComponent } from '../entry-form/entry-form.component';
 import { EntriesService } from '../../core/services/entries.service';
 import { HeroCardComponent } from '../../shared/components/hero-card/hero-card.component';
+import { SparklineChartComponent } from '../../shared/components/sparkline-chart/sparkline-chart.component';
+import { KpiRowComponent } from '../../shared/components/kpi-row/kpi-row.component';
 import { addMonths, currentMonthIso, formatMonthLabel } from '../../shared/utils/month.util';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, HeroCardComponent],
+  imports: [MatButtonModule, MatIconModule, HeroCardComponent, SparklineChartComponent, KpiRowComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
@@ -39,6 +41,10 @@ export class DashboardComponent {
   readonly monthTotal = computed(() =>
     this.entriesForMonth().reduce((sum, e) => sum + e.amount, 0),
   );
+
+  readonly monthlyTotals = computed(() => this.entriesSvc.monthlyTotals());
+
+  readonly selectedMonthEntryCount = computed(() => this.entriesForMonth().length);
 
   readonly isLoading = computed(() => !this.entriesSvc.isInitialized());
 

@@ -1,12 +1,30 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { computed, signal } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatBottomSheet } from '@angular/material/bottom-sheet';
+import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 import { DashboardComponent } from './dashboard.component';
 import { EntriesService } from '../../core/services/entries.service';
-import { LocalEntry } from '../../core/models/entry.model';
+import { LocalEntry, MonthlyTotal } from '../../core/models/entry.model';
 import { currentMonthIso } from '../../shared/utils/month.util';
+
+// Chart.js requires canvas.getContext('2d') which JSDOM doesn't implement
+beforeAll(() => {
+  const ctx = new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === 'canvas') return document.createElement('canvas');
+        if (prop === 'measureText') return vi.fn().mockReturnValue({ width: 0, actualBoundingBoxAscent: 0, actualBoundingBoxDescent: 0 });
+        if (prop === 'createLinearGradient') return vi.fn().mockReturnValue({ addColorStop: vi.fn() });
+        if (prop === 'createRadialGradient') return vi.fn().mockReturnValue({ addColorStop: vi.fn() });
+        return vi.fn().mockReturnValue(undefined);
+      },
+    },
+  );
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+});
 
 function makeEntry(overrides: Partial<LocalEntry> = {}): LocalEntry {
   return {
@@ -40,6 +58,7 @@ describe('DashboardComponent', () => {
     const entriesServiceMock = {
       entries: entriesSignal.asReadonly(),
       isInitialized: initializedSignal.asReadonly(),
+      monthlyTotals: computed<MonthlyTotal[]>(() => []),
     };
 
     bottomSheetSpy = {
@@ -53,6 +72,7 @@ describe('DashboardComponent', () => {
       providers: [
         { provide: EntriesService, useValue: entriesServiceMock },
         { provide: MatBottomSheet, useValue: bottomSheetSpy },
+        provideCharts(withDefaultRegisterables()),
       ],
     }).compileComponents();
 

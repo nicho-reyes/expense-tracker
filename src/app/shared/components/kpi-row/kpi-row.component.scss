@@ -1,0 +1,63 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.kpi-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.kpi-card {
+  flex: 1;
+  border-radius: 0.75rem;
+  background: var(--mat-sys-surface-container, #f4f4f5);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  &.skeleton {
+    height: 40px;
+    background: var(--color-muted, #d4d4d8);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+}
+
+.kpi-value {
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+
+  &.over {
+    color: var(--color-error, #ef4444);
+  }
+
+  &.under {
+    color: var(--color-accent, #6366f1);
+  }
+
+  &.flat,
+  &.muted,
+  &.neutral {
+    color: var(--mat-sys-on-surface-variant, #71717a);
+  }
+}
+
+.kpi-arrow {
+  font-size: 1rem;
+  width: 1rem;
+  height: 1rem;
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  color: var(--mat-sys-on-surface-variant, #71717a);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
