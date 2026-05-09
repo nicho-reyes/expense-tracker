@@ -152,4 +152,19 @@ So that I can review exactly what I spent in any category.
 **When** it loads
 **Then** the correct category and month data is displayed from IDB
 
+### End-to-End Tests (Playwright — Story 4.4 is Epic 4's last story)
+
+Uses the deterministic 3-month/4-category/20-entry IDB fixture from `idb-helpers.ts`.
+
+**Tests — `e2e/dashboard.spec.ts` (replaces existing placeholder):**
+
+| ID | Scenario |
+|---|---|
+| E4-01 | KPI row: total spend, largest category, entry count — all non-zero with seeded data |
+| E4-02 | Sparkline canvas element present with non-zero bounding box |
+| E4-03 | Category breakdown: segment count matches fixture category count |
+| E4-04 | Tap category segment → drill-down shows only entries for that category |
+| E4-05 | Month switcher → KPI values update to reflect seeded data for selected month |
+| E4-06 | No IDB entries → "No data" empty state shown, no JS errors |
+
 ---

@@ -260,4 +260,29 @@ So that I can correct historical entries without switching to the Sheet directly
 **When** `SyncQueueService.enqueue()` is called
 **Then** `targetTabName` is set from the originating entry's tab name; INSERT operations always set `targetTabName` to `null`
 
+### End-to-End Tests (Playwright — Story 3.7 is Epic 3's last story)
+
+**Tests — `e2e/offline.spec.ts` (replaces existing placeholder):**
+
+| ID | Scenario |
+|---|---|
+| E3-01 | `page.context().setOffline(true)` → QuickAdd still saves → entry appears in list |
+| E3-02 | Go back online → `SyncStatusBar` transitions: queued → syncing → synced |
+| E3-03 | Offline + page reload → IDB entries still visible, no crash or blank screen |
+
+**Tests — `e2e/sync-review.spec.ts` (replaces existing placeholder):**
+
+| ID | Scenario |
+|---|---|
+| E3-04 | Pre-sync review screen lists pending entries with correct data |
+| E3-05 | Approve sync → `sheets-mock.ts` stub receives correct write payload |
+| E3-06 | Reject individual entry → removed from queue, not included in write payload |
+
+**Tests — `e2e/sync-status.spec.ts` (new file):**
+
+| ID | Scenario |
+|---|---|
+| E3-07 | Sheets stub returns 409 → `SyncStatusBar` shows conflict/error indicator |
+| E3-08 | Manual retry on conflict → resolves to synced state |
+
 ---

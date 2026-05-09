@@ -137,3 +137,27 @@ So that I can quickly enter a week's worth of expenses without re-selecting the 
 **Given** batch mode is active and entries have been saved
 **When** I review the entry list
 **Then** each individually saved batch entry appears as a separate row
+
+### End-to-End Tests (Playwright — Story 6.4 is Epic 6's last story)
+
+**Tests — `e2e/filters.spec.ts` (new file):**
+
+| ID | Scenario |
+|---|---|
+| E6-01 | FilterChipRow renders: All chip, current month chip, active category chips |
+| E6-02 | Select category chip → entry list shows only that category's entries |
+| E6-03 | Select month chip → entry list shows only entries for that month |
+| E6-04 | Search: typing partial remarks → list narrows in real time (debounced) |
+| E6-05 | Search + category chip combined → intersection filter applied correctly |
+| E6-06 | Clear all filters → full unfiltered list restored |
+| E6-07 | Year switcher → month chips update to reflect selected year |
+
+**Tests — `e2e/batch-entry.spec.ts` (new file):**
+
+| ID | Scenario |
+|---|---|
+| E6-08 | Batch mode activates; QuickAdd opens with batch controls visible |
+| E6-09 | Save entry in batch → new form immediately opens with date and category pre-filled |
+| E6-10 | Override pre-filled category → saves with overridden value, not the pre-filled one |
+| E6-11 | Stop batch → drawer closes; all saved entries appear in list |
+| E6-12 | Each batch save → `syncQueue` IDB contains one PENDING record per entry saved |

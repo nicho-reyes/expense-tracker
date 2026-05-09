@@ -236,4 +236,23 @@ So that my Sheet stays up to date without any manual export step.
 **When** `SyncQueueService.enqueue()` runs
 **Then** the item is stored as PENDING in IDB and no network call is attempted — full retry is handled in Epic 3
 
+### End-to-End Tests (Playwright — Story 2.5 is Epic 2's last story)
+
+**Shared fixture infrastructure — build these first, used by all subsequent epics:**
+- `e2e/fixtures/auth.fixture.ts` — `page.addInitScript()` seeds IDB with a non-expired token record, bypassing the GIS popup
+- `e2e/fixtures/sheets-mock.ts` — `page.route('**/sheets.googleapis.com/**', ...)` stubs returning fixture JSON for reads and 200 for writes
+- `e2e/support/idb-helpers.ts` — programmatic IDB seed/clear helpers
+
+**Tests — `e2e/entry-form.spec.ts` (replaces existing placeholder):**
+
+| ID | Scenario |
+|---|---|
+| E2-01 | QuickAdd bottom sheet opens on FAB tap |
+| E2-02 | Valid entry submitted → appears in entry list with correct amount and category |
+| E2-03 | Amount field empty → submit blocked, inline validation error visible |
+| E2-04 | Edit entry → bottom sheet pre-fills values → save → list row updated |
+| E2-05 | Delete entry → confirm dialog → row removed from list |
+| E2-06 | Entry survives page reload — IDB persistence assertion via `idb-helpers.ts` |
+| E2-07 | After entry save → `syncQueue` IDB store contains 1 PENDING record |
+
 ---

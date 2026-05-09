@@ -106,4 +106,22 @@ So that new categories are available for entry logging immediately and synchroni
 **When** the deletion is confirmed
 **Then** the category is removed from the `categories` IDB store, its `--color-[category-id]` CSS custom property is removed from `document.documentElement.style`, and no Sheet write-back is required for the deletion
 
+### End-to-End Tests (Playwright — Story 5.3 is Epic 5's last story)
+
+Requires fixtures from Epic 2 (Story 2.5) to be merged before this story runs.
+
+**Tests — `e2e/categories.spec.ts` (new file):**
+
+| ID | Scenario |
+|---|---|
+| E5-01 | CategoryManager route accessible from app shell navigation |
+| E5-02 | Category list renders all seeded categories with color swatches |
+| E5-03 | Add category → new row in list; `sheets-mock.ts` stub receives correct append payload |
+| E5-04 | ColorPicker opens on swatch click → selecting color updates preview before save |
+| E5-05 | Edit category name → list updates; Sheets stub called with correct update payload |
+| E5-06 | Delete unreferenced category → confirm → row removed; `--color-[id]` CSS var removed from `<html>` |
+| E5-07 | Delete category referenced by entry → rejected with entry count in error message |
+| E5-08 | Duplicate category name → inline error shown, no API call fired |
+| E5-09 | New category immediately available as tile in QuickAdd sheet after creation |
+
 ---
