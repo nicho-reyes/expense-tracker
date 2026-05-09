@@ -1,0 +1,16 @@
+<button
+  type="button"
+  [attr.aria-label]="category().name"
+  [attr.aria-pressed]="selected()"
+  class="flex flex-col items-center gap-1 p-2 rounded-lg min-w-[64px] min-h-[64px]"
+  [class.ring-2]="selected()"
+  [class.ring-indigo-500]="selected()"
+  [class.bg-zinc-100]="selected()"
+  style="touch-action: manipulation;"
+  (click)="onClick()">
+  <span
+    aria-hidden="true"
+    class="w-8 h-8 rounded-full"
+    [style.background-color]="'var(--color-' + category().id + ')'"></span>
+  <span class="text-xs">{{ category().name }}</span>
+</button>

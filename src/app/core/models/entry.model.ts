@@ -13,10 +13,14 @@ export interface LocalEntry {
   isReadOnly: boolean;
 }
 
-export type NewEntryInput = Pick<
-  LocalEntry,
-  'date' | 'category' | 'amount' | 'remarks' | 'tabName' | 'schemaVersion'
->;
+export type NewEntryInput = {
+  date: string;
+  category: string;
+  amount: number;
+  remarks: string;
+  tabName?: string;
+  schemaVersion?: '2025' | '2026';
+};
 
 export enum QueueState {
   PENDING = 'PENDING',

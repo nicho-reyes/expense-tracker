@@ -342,6 +342,80 @@ describe('CategoriesService', () => {
     });
   });
 
+  describe('markUsed() + categoryOrder', () => {
+    const cats: Category[] = [
+      { id: 'food', name: 'Food', color: '#111', position: 0 },
+      { id: 'transport', name: 'Transport', color: '#222', position: 1 },
+      { id: 'health', name: 'Health', color: '#333', position: 2 },
+    ];
+
+    beforeEach(async () => {
+      idbSpy.getAll.mockResolvedValue(cats);
+      sheetsSpy.connectedSpreadsheetId.mockReturnValue(null);
+      await service.init();
+    });
+
+    it('categoryOrder returns categories sorted by position asc when no usage data (AC5)', () => {
+      const order = service.categoryOrder();
+      expect(order.map(c => c.id)).toEqual(['food', 'transport', 'health']);
+    });
+
+    it('markUsed bumps the used category to top of categoryOrder (AC5)', async () => {
+      service.markUsed('health');
+      await Promise.resolve(); // let signal settle
+
+      const order = service.categoryOrder();
+      expect(order[0].id).toBe('health');
+    });
+
+    it('most recently used category wins over earlier used (AC5)', async () => {
+      service.markUsed('transport');
+      await Promise.resolve();
+      service.markUsed('food');
+      await Promise.resolve();
+
+      const order = service.categoryOrder();
+      expect(order[0].id).toBe('food');
+      expect(order[1].id).toBe('transport');
+    });
+
+    it('markUsed writes to appMeta.categoryRecentlyUsed in IDB', () => {
+      service.markUsed('food');
+      expect(idbSpy.set).toHaveBeenCalledWith(
+        'appMeta',
+        'categoryRecentlyUsed',
+        expect.objectContaining({ food: expect.any(Number) }),
+      );
+    });
+
+  });
+
+  describe('categoryOrder — restored from IDB on init (AC5)', () => {
+    it('init() loads categoryRecentlyUsed from IDB and restores order', async () => {
+      const cats: Category[] = [
+        { id: 'food', name: 'Food', color: '#111', position: 0 },
+        { id: 'transport', name: 'Transport', color: '#222', position: 1 },
+        { id: 'health', name: 'Health', color: '#333', position: 2 },
+      ];
+      const recentData: Record<string, number> = {
+        health: Date.now() - 1000,
+        transport: Date.now() - 500,
+      };
+      idbSpy.getAll.mockResolvedValue(cats);
+      idbSpy.get.mockImplementation(async (_store: string, key: string) => {
+        if (key === 'categoryRecentlyUsed') return recentData;
+        return undefined;
+      });
+      sheetsSpy.connectedSpreadsheetId.mockReturnValue(null);
+
+      await service.init();
+
+      const order = service.categoryOrder();
+      expect(order[0].id).toBe('transport'); // most recent last-used
+      expect(order[1].id).toBe('health');
+    });
+  });
+
   describe('slugifyCategoryId()', () => {
     it("slugifies 'Food & Drinks' to 'food-drinks'", () => {
       expect(slugifyCategoryId('Food & Drinks')).toBe('food-drinks');

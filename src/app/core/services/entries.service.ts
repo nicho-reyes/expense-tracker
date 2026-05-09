@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { IdbService } from './idb.service';
 import { NotificationService } from './notification.service';
+import { SheetsService } from './sheets.service';
 import { LocalEntry, NewEntryInput } from '../models/entry.model';
 import { AppError } from '../models/error.model';
 
@@ -8,6 +9,7 @@ import { AppError } from '../models/error.model';
 export class EntriesService {
   private readonly idb = inject(IdbService);
   private readonly notification = inject(NotificationService);
+  private readonly sheets = inject(SheetsService);
 
   private readonly _entries = signal<LocalEntry[]>([]);
   readonly entries = this._entries.asReadonly();
@@ -33,6 +35,8 @@ export class EntriesService {
   }
 
   async add(input: NewEntryInput): Promise<LocalEntry> {
+    const tabName = input.tabName ?? this.sheets.getActive2026TabName() ?? '';
+    const schemaVersion: '2025' | '2026' = input.schemaVersion ?? '2026';
     const entry: LocalEntry = {
       id: crypto.randomUUID(),
       date: input.date,
@@ -41,8 +45,8 @@ export class EntriesService {
       category: input.category,
       amount: input.amount,
       remarks: input.remarks,
-      tabName: input.tabName,
-      schemaVersion: input.schemaVersion,
+      tabName,
+      schemaVersion,
       sheetRowIndex: null,
       syncStatus: 'pending',
       isReadOnly: false,

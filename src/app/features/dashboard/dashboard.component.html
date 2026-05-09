@@ -1,1 +1,14 @@
-<div>Dashboard — implemented in Story 4.1</div>
+<div class="p-4">
+  <h1 class="text-2xl font-semibold">Dashboard</h1>
+</div>
+
+<button
+  #fabRef
+  mat-fab
+  type="button"
+  aria-label="Add expense"
+  class="fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50"
+  [style.visibility]="sheetOpen() ? 'hidden' : 'visible'"
+  (click)="onOpenQuickAdd()">
+  <mat-icon>add</mat-icon>
+</button>

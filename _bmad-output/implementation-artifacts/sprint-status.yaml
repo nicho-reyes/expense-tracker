@@ -1,5 +1,5 @@
 # generated: 2026-05-08
-# last_updated: 2026-05-08
+# last_updated: 2026-05-09T18:00:00Z
 # project: expense-dashboard
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08
-last_updated: 2026-05-09T17:00:00Z
+last_updated: 2026-05-09T18:00:00Z
 project: expense-dashboard
 
 project_key: NOKEY
@@ -56,7 +56,7 @@ development_status:
   # Epic 2: Expense Entry & Local-First Core
   epic-2: in-progress
   2-1-entriesservice-idb-crud-and-optimistic-signal-update: done
-  2-2-quickadd-bottom-sheet-category-amount-date-and-remarks: backlog
+  2-2-quickadd-bottom-sheet-category-amount-date-and-remarks: done
   2-3-entry-list-view-and-entryrowcomponent: done
   2-4-edit-and-delete-entry-with-confirmation-and-undo: backlog
   2-5-syncqueue-insert-write-new-entries-to-google-sheets: backlog

@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { IdbService } from './idb.service';
 import { SheetsService } from './sheets.service';
@@ -19,9 +19,20 @@ export class CategoriesService {
 
   private readonly _categories = signal<Category[]>([]);
   private readonly _loadError = signal<AppError | null>(null);
+  private readonly _recentlyUsed = signal<Record<string, number>>({});
 
   readonly categories = this._categories.asReadonly();
   readonly loadError = this._loadError.asReadonly();
+
+  readonly categoryOrder = computed<Category[]>(() => {
+    const recent = this._recentlyUsed();
+    return [...this._categories()].sort((a, b) => {
+      const ra = recent[a.id] ?? 0;
+      const rb = recent[b.id] ?? 0;
+      if (ra !== rb) return rb - ra;
+      return a.position - b.position;
+    });
+  });
 
   private _seeding = false;
 
@@ -33,6 +44,8 @@ export class CategoriesService {
         this._categories.set(cached);
         this.injectCssProperties(cached);
       }
+      const recentlyUsed = await this.idb.get<Record<string, number>>('appMeta', 'categoryRecentlyUsed');
+      this._recentlyUsed.set(recentlyUsed ?? {});
       await this.seedFromSheet(cached);
     } catch (err) {
       // AC6/AC7: only surface error when no cached categories are available to display
@@ -40,6 +53,12 @@ export class CategoriesService {
         this._loadError.set(this.toAppError(err));
       }
     }
+  }
+
+  markUsed(categoryId: string): void {
+    this._recentlyUsed.update(map => ({ ...map, [categoryId]: Date.now() }));
+    this.idb.set('appMeta', 'categoryRecentlyUsed', this._recentlyUsed())
+      .catch(err => console.warn('[CategoriesService] Failed to persist recently-used:', err));
   }
 
   async reorder(reorderedIds: string[]): Promise<void> {

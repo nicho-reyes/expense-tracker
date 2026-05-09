@@ -1,1 +1,5 @@
-// Entry form styles — implemented in Story 2.2
+:host {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

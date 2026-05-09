@@ -1,1 +1,65 @@
-<div>Entry Form — implemented in Story 2.2</div>
+<div class="flex-1 min-h-0 flex flex-col gap-3 p-4 overflow-y-auto">
+  <mat-form-field appearance="outline">
+    <mat-label>Date</mat-label>
+    <input
+      #dateInput
+      matInput
+      type="date"
+      [ngModel]="dateValue()"
+      (ngModelChange)="dateValue.set($event)" />
+  </mat-form-field>
+
+  <div class="flex gap-2 overflow-x-auto py-2" role="group" aria-label="Category">
+    @for (cat of categoryTiles(); track cat.id) {
+      <app-category-tile
+        [category]="cat"
+        [selected]="selectedCategoryId() === cat.id"
+        (tap)="onSelectCategory($event)" />
+    } @empty {
+      <span class="text-sm text-zinc-500 self-center py-4">No categories yet — add one in Settings.</span>
+    }
+  </div>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Amount (CHF)</mat-label>
+    <input
+      #amountInput
+      matInput
+      type="number"
+      inputmode="decimal"
+      step="0.01"
+      [ngModel]="amountValue()"
+      (ngModelChange)="amountValue.set($event == null ? null : +$event)" />
+  </mat-form-field>
+  @if (amountValue() === 0) {
+    <p class="text-xs text-red-600 -mt-2 px-1" role="alert">Amount cannot be zero.</p>
+  }
+
+  <mat-form-field appearance="outline">
+    <mat-label>Remarks (optional)</mat-label>
+    <input
+      matInput
+      type="text"
+      [ngModel]="remarksValue()"
+      (ngModelChange)="remarksValue.set($event)" />
+  </mat-form-field>
+</div>
+
+<div class="flex gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white dark:bg-zinc-900 border-t">
+  <button
+    mat-button
+    type="button"
+    (click)="onCancel()">
+    Cancel
+  </button>
+  <button
+    mat-flat-button
+    color="primary"
+    type="button"
+    class="flex-1"
+    [disabled]="!canSave() || isSaving()"
+    [attr.aria-disabled]="!canSave() || isSaving()"
+    (click)="onSave()">
+    Save
+  </button>
+</div>

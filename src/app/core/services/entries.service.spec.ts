@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { EntriesService } from './entries.service';
 import { IdbService } from './idb.service';
 import { NotificationService } from './notification.service';
+import { SheetsService } from './sheets.service';
 import { LocalEntry, NewEntryInput } from '../models/entry.model';
 import { AppError } from '../models/error.model';
 
@@ -52,6 +53,7 @@ describe('EntriesService', () => {
     delete: ReturnType<typeof vi.fn>;
   };
   let notificationSpy: { showError: ReturnType<typeof vi.fn> };
+  let sheetsSpy: { getActive2026TabName: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     idbSpy = {
@@ -62,12 +64,16 @@ describe('EntriesService', () => {
     notificationSpy = {
       showError: vi.fn(),
     };
+    sheetsSpy = {
+      getActive2026TabName: vi.fn().mockReturnValue('2026'),
+    };
 
     TestBed.configureTestingModule({
       providers: [
         EntriesService,
         { provide: IdbService, useValue: idbSpy },
         { provide: NotificationService, useValue: notificationSpy },
+        { provide: SheetsService, useValue: sheetsSpy },
       ],
     });
     service = TestBed.inject(EntriesService);
