@@ -396,3 +396,51 @@ So that I can write fuller notes ("Coffee with Anna at the Lindenhof place — d
 **Then** the patch is contained to the QuickAddSheetComponent's template + SCSS (no signal/service surface changes); migration risk is zero because the data shape (`LocalEntry.remarks: string`) is unchanged — single-line remarks already in IDB and Sheets continue to render correctly in the new textarea
 
 ---
+
+## Story 2.9: E2E coverage backfill and verification
+
+As Nick,
+I want a single idempotent story that audits the Playwright E2E suite, unskips tests for already-merged behavior, gap-fills missing tests for stories whose owning specs predate the comprehensive E2E plan, and confirms the whole suite passes,
+So that the E2E suite becomes a trustworthy regression net rather than a half-skipped scaffold — and the gap doesn't recur on future stories.
+
+**Background:** The epic E2E sections were drafted in commit `84a00c5` BEFORE Stories 2.6, 2.7, 2.8, 3.8, 3.9 were added — so those stories don't appear in the original "Story X.Y is Epic N's last story" mapping. Additionally, several already-merged stories (2.2, 2.4, 2.5, 5.1) shipped without unskipping the Playwright tests that target their behavior. As of 2026-05-09, **only 9 of 22 E2E tests on disk actually run**; the rest are `test.skip` even though their underlying functionality is shipped. Story 2.9 closes both gaps in one pass — designed to be **idempotent**: it inspects current state and only does work that is still missing, so it can be run regardless of what 2.6/2.7/2.8 dev work has already added.
+
+**Acceptance Criteria:**
+
+**Given** Story 2.9 begins by auditing the current `e2e/` directory and the merged stories list (`sprint-status.yaml`)
+**When** the audit produces a coverage matrix
+**Then** the matrix tabulates: per-story expected E2E tests, per-test current state (`test`, `test.skip`, `test.todo`, missing), and per-test pass/fail of the most recent local Playwright run
+
+**Given** the audit finds a Playwright `test.skip(...)` whose behavior is already merged on master (i.e. the owning story is `done` in sprint-status)
+**When** the test is evaluated
+**Then** 2.9's implementation flips it to `test(...)` and runs it; if the test passes, that's the new ground truth; if the test fails, 2.9 either fixes the test (preferred) or files a bug-fix follow-up commit and leaves the test running so the suite reflects reality
+
+**Given** a story is `done` in sprint-status but has NO Playwright test corresponding to its primary user flow
+**When** 2.9 reaches the gap-fill step
+**Then** 2.9 writes the missing test using existing `auth.fixture.ts` + `sheets-mock.ts` + `idb-helpers.ts` infrastructure (no new fixture invention) and adds it to the appropriate `*.spec.ts` file (or creates a new spec file when none fits)
+
+**Given** Stories 2.6 (multi-year hydration) and 2.7 (persistent auth) are in WIP at the time 2.9 starts
+**When** 2.9 evaluates their E2E coverage
+**Then** 2.9 first reads any e2e additions the WIP devs have already pushed to their worktrees or to master; for each missing test, 2.9 writes only the gap. Specifically: (a) if `e2e/hydration.spec.ts` does not exist, 2.9 creates it with at least one test "Fresh connect with prior 2026-tab entries → entries render in list"; (b) if `e2e/auth.spec.ts` is still a single skipped placeholder, 2.9 unskips and replaces it with at least one test "Tab close + reopen with valid persisted token → no /auth redirect, list renders without auth UI"
+
+**Given** Story 2.8 (multi-line Remarks) is small UI-only behavior
+**When** 2.9 evaluates 2.8's E2E need
+**Then** 2.9 documents in the suite (a comment in `entry-form.spec.ts` near the Remarks-related tests) that 2.8 is intentionally covered by Vitest unit tests, NOT a new E2E test; this prevents future drift toward "we forgot to add an E2E for 2.8"
+
+**Given** Stories 3.8 (manual re-sync) and 3.9 (auto re-sync triggers) have not yet started implementation
+**When** 2.9 patches their drafted specs (located in their worktrees, currently uncommitted)
+**Then** 2.9 appends an "E2E Coverage" subsection to each spec listing the test IDs that story will own when implemented, exactly mirroring the pattern Stories 2.5/3.7/4.4/5.3/6.4 specs follow — for 3.8: `e2e/re-sync.spec.ts` with RS-01 (Sheet edit + Re-sync → overwrite), RS-02 (PENDING preserved), RS-03 (stale entries listed); for 3.9: extend `e2e/offline.spec.ts` with O-04 (reconnect → auto-sync fires)
+
+**Given** 2.9 completes its work
+**When** `npx playwright test` runs
+**Then** the entire suite passes locally (zero failures, zero unintentional skips); intentional skips (e.g. for behavior whose owning story has not yet merged) are annotated with a comment naming the gating story so the rationale is visible at the test site
+
+**Given** 2.9's PR is reviewed
+**When** the diff is inspected
+**Then** the change is contained to `e2e/**`, the 3.8 and 3.9 spec files in their respective worktrees, and a single comment in any merged-story spec's Testing section pointing to the unskipped tests; **no source code under `src/**` is modified** by 2.9 (if the audit surfaces a real bug, that's a separate follow-up commit with a `fix:` prefix, not part of 2.9's `chore(e2e):` scope)
+
+**Given** future stories are written after 2.9 lands
+**When** the BMad story template is consulted
+**Then** the template includes a new boilerplate AC: "Any Playwright `test.skip(...)` corresponding to a behavior this story implements is unskipped and passing before merge" — preventing the original drift that necessitated 2.9; this template change is documented as a Tasks subtask in 2.9 and can be deferred to a separate small chore if not feasible in the same PR
+
+---

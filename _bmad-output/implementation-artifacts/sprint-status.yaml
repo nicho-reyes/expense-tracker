@@ -63,6 +63,7 @@ development_status:
   2-6-multi-year-entry-hydration-on-first-sheet-connect: backlog
   2-7-persistent-auth-and-boot-time-silent-reauth: backlog
   2-8-multi-line-expandable-remarks-field: backlog
+  2-9-e2e-coverage-backfill-and-verification: backlog
   epic-2-retrospective: optional
 
   # Epic 3: Google Sheets Sync, Offline Resilience & Legacy Schema
