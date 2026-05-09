@@ -12,4 +12,5 @@ export type AppError =
   | { type: 'SCHEMA_MISMATCH'; tabName: string; expected: string[]; received: string[] }
   | { type: 'UNKNOWN_ERROR'; message: string }
   | { type: 'CATEGORY_IN_USE'; categoryId: string; categoryName: string; entryCount: number }
-  | { type: 'CATEGORY_NAME_DUPLICATE'; name: string };
+  | { type: 'CATEGORY_NAME_DUPLICATE'; name: string }
+  | { type: 'AUTH_SILENT_REAUTH_FAILED'; reason: 'no-google-session' | 'network' | 'gis-error' | 'timeout' | 'unknown'; message: string };

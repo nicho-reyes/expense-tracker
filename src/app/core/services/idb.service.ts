@@ -4,6 +4,11 @@ import { LocalEntry, SyncQueueItem } from '../models/entry.model';
 import { Category } from '../models/category.model';
 import { AppError } from '../models/error.model';
 
+export interface PersistedAuth {
+  accessToken: string;
+  expiresAt: number;
+}
+
 interface ExpenseDashboardDb extends DBSchema {
   entries: {
     key: string;
@@ -120,7 +125,7 @@ export class IdbService {
   }
 
   async delete(
-    store: 'entries' | 'syncQueue' | 'categories',
+    store: 'entries' | 'syncQueue' | 'categories' | 'appMeta',
     id: string,
   ): Promise<void> {
     try {

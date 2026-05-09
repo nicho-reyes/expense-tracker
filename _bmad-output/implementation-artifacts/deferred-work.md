@@ -77,3 +77,12 @@
 - FAB has no click handler — `<button mat-fab>` is visible and focusable but inert. Story 2.2 wires the tap handler to open `QuickAddSheetComponent`. [src/app/app.html:9-15]
 - BottomNav and FAB render on all routes including unauthenticated `/auth` — shell elements display unconditionally. Story 1.2 activates the auth guard to redirect to `/auth` and Story 1.2 can conditionally suppress shell chrome on that route. [src/app/app.html]
 - `App.isDark` signal declared but never bound in template — initialized in `ngOnInit` but `app.html` doesn't reference it; it's dead state. Intentional per spec pattern; remove or bind in a future story if theme-aware shell elements are added. [src/app/app.ts:19]
+
+## Deferred from: code review of 2-7-persistent-auth-and-boot-time-silent-reauth (2026-05-09)
+
+- Double `idb.delete` on Path B failure — `init()` deletes the expired/malformed record; `attemptBootSilentReauth()` catch block also calls delete. Harmless (IDB delete of absent key is a no-op); removing the second delete would require restructuring the catch path. [auth.service.ts:attemptBootSilentReauth]
+- `_isRefreshInProgress` not cleared in `triggerProactiveRefresh` path — pre-existing from Story 1.3; `triggerProactiveRefresh` does not set the flag itself, so if it's concurrently held, the proactive refresh silently skips. [auth.service.ts:triggerProactiveRefresh]
+- `handleUnauthorized()` `finalize()` may not clear `_isRefreshInProgress` if the RxJS observable never reaches the finalize operator (e.g. sync throw before subscription) — pre-existing from Story 1.3. [auth.service.ts:handleUnauthorized]
+- Concurrent `init()` calls: both callers read IDB before either sets `_isRefreshInProgress`, so two callers can both enter `attemptBootSilentReauth()` before the guard fires — single-tab assumption (NFR-S2) makes this theoretical; add an init-level mutex if multi-tab sync is ever needed. [auth.service.ts:init]
+- E2E IDB seeds use hard-coded `version: 1` — pre-existing pattern; if `IdbService.DB_VERSION` is ever bumped without creating a version-1 schema first, `onupgradeneeded` won't fire in tests, causing `objectStore('appMeta')` to throw. [e2e/support/idb-helpers.ts, e2e/auth.spec.ts]
+- Spec `AppError` variant count says "9→10" but actual union has more variants (Stories 5.3 added `CATEGORY_IN_USE` and `CATEGORY_NAME_DUPLICATE`) — doc drift in the story spec; update architecture.md variant count in a docs-sync story. [_bmad-output/implementation-artifacts/2-7-persistent-auth-and-boot-time-silent-reauth.md:Dev Notes]

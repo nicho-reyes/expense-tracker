@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { NotificationService } from './notification.service';
 import { SyncQueueService } from './sync-queue.service';
 import { ConfigService } from './config.service';
+import { IdbService } from './idb.service';
 
 // Mock GIS window.google
 function setupGisMock(options: {
@@ -67,6 +68,7 @@ describe('AuthService', () => {
   let notificationSpy: { showError: ReturnType<typeof vi.fn>; showSuccess: ReturnType<typeof vi.fn>; showInfo: ReturnType<typeof vi.fn> };
   let syncQueueSpy: { retryAll: ReturnType<typeof vi.fn> };
   let configStub: { googleClientId: string };
+  let idbSpy: { get: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     routerSpy = { navigate: vi.fn().mockResolvedValue(true) };
@@ -77,6 +79,11 @@ describe('AuthService', () => {
     };
     syncQueueSpy = { retryAll: vi.fn().mockResolvedValue(undefined) };
     configStub = { googleClientId: 'test-client-id.apps.googleusercontent.com' };
+    idbSpy = {
+      get: vi.fn().mockResolvedValue(undefined),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
 
     TestBed.configureTestingModule({
       providers: [
@@ -85,6 +92,7 @@ describe('AuthService', () => {
         { provide: NotificationService, useValue: notificationSpy },
         { provide: SyncQueueService, useValue: syncQueueSpy },
         { provide: ConfigService, useValue: configStub },
+        { provide: IdbService, useValue: idbSpy },
       ],
     });
     service = TestBed.inject(AuthService);
@@ -133,6 +141,95 @@ describe('AuthService', () => {
       vi.useRealTimers();
       loadSpy.mockRestore();
     });
+
+    it('Path A — valid persisted token restores _user, schedules refresh, no auth UI', async () => {
+      const expiresAt = Date.now() + 30 * 60 * 1000;
+      idbSpy.get.mockResolvedValue({ accessToken: 'persisted-tok', expiresAt });
+      const loadSpy = vi.spyOn(service as any, 'loadGisScript').mockResolvedValue(undefined);
+      const setupSpy = vi.spyOn(service as any, 'setupTokenClient').mockImplementation(() => {});
+      const scheduleSpy = vi.spyOn(service as any, 'scheduleTokenRefresh').mockImplementation(() => {});
+
+      await service.init();
+
+      expect(service.isAuthenticated()).toBe(true);
+      expect(service.getAccessToken()).toBe('persisted-tok');
+      expect(notificationSpy.showError).not.toHaveBeenCalled();
+      expect(routerSpy.navigate).not.toHaveBeenCalled();
+      expect(idbSpy.delete).not.toHaveBeenCalled();
+      expect(scheduleSpy).toHaveBeenCalledWith(expiresAt);
+      loadSpy.mockRestore();
+      setupSpy.mockRestore();
+    });
+
+    it('Path B success — expired token + valid Google session triggers silent re-auth, persists new token', async () => {
+      idbSpy.get.mockResolvedValue({ accessToken: 'old-tok', expiresAt: Date.now() - 1000 });
+      setupGisMock({ callbackWithToken: true });
+      const loadSpy = vi.spyOn(service as any, 'loadGisScript').mockResolvedValue(undefined);
+
+      await service.init();
+
+      // Stale record should be purged
+      expect(idbSpy.delete).toHaveBeenCalledWith('appMeta', 'auth');
+      // New token should be written
+      expect(idbSpy.set).toHaveBeenCalledWith('appMeta', 'auth', expect.objectContaining({
+        accessToken: 'test-token-abc',
+      }));
+      expect(service.isAuthenticated()).toBe(true);
+      expect(routerSpy.navigate).not.toHaveBeenCalledWith(['/auth']);
+      loadSpy.mockRestore();
+    });
+
+    it('Path B failure — expired token + revoked Google session emits AUTH_SILENT_REAUTH_FAILED and routes to /auth', async () => {
+      idbSpy.get.mockResolvedValue({ accessToken: 'old-tok', expiresAt: Date.now() - 1000 });
+      setupGisMock({ callbackWithToken: false });
+      const loadSpy = vi.spyOn(service as any, 'loadGisScript').mockResolvedValue(undefined);
+
+      await service.init();
+
+      expect(notificationSpy.showError).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'AUTH_SILENT_REAUTH_FAILED' }),
+      );
+      expect(idbSpy.delete).toHaveBeenCalledWith('appMeta', 'auth');
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/auth']);
+      expect(service.isReauthPending()).toBe(true);
+      loadSpy.mockRestore();
+    });
+
+    it('Path B — null persisted record falls through to silent re-auth without calling idb.delete', async () => {
+      idbSpy.get.mockResolvedValue(undefined);
+      setupGisMock({ callbackWithToken: true });
+      const loadSpy = vi.spyOn(service as any, 'loadGisScript').mockResolvedValue(undefined);
+
+      await service.init();
+
+      expect(idbSpy.delete).not.toHaveBeenCalled();
+      expect(service.isAuthenticated()).toBe(true);
+      loadSpy.mockRestore();
+    });
+
+    it.each([
+      [null, 'null'],
+      [{}, 'empty object'],
+      [{ accessToken: '' }, 'empty accessToken'],
+      [{ accessToken: 'x', expiresAt: NaN }, 'NaN expiresAt'],
+      [{ accessToken: 'x', expiresAt: -1 }, 'negative expiresAt'],
+      [{ accessToken: 'x', expiresAt: 0 }, 'zero expiresAt'],
+    ])('malformed/absent persisted record (%s) falls through to silent re-auth', async (raw, _desc) => {
+      idbSpy.get.mockResolvedValue(raw);
+      setupGisMock({ callbackWithToken: true });
+      const loadSpy = vi.spyOn(service as any, 'loadGisScript').mockResolvedValue(undefined);
+
+      await service.init();
+
+      // Non-null malformed records must be purged by readPersistedAuth() (AC7)
+      if (raw !== null) {
+        expect(idbSpy.delete).toHaveBeenCalledWith('appMeta', 'auth');
+      } else {
+        expect(idbSpy.delete).not.toHaveBeenCalled();
+      }
+      expect(service.isAuthenticated()).toBe(true);
+      loadSpy.mockRestore();
+    });
   });
 
   describe('getAccessToken()', () => {
@@ -174,6 +271,11 @@ describe('AuthService', () => {
       expect(routerSpy.navigate).toHaveBeenCalledWith(['/auth']);
     });
 
+    it('clears persisted auth from IDB', () => {
+      service.signOut();
+      expect(idbSpy.delete).toHaveBeenCalledWith('appMeta', 'auth');
+    });
+
     it('clears the refresh timer on signOut', () => {
       vi.useFakeTimers();
       const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
@@ -189,6 +291,35 @@ describe('AuthService', () => {
       service.isReauthPending.set(true);
       service.signOut();
       expect(service.isReauthPending()).toBe(false);
+    });
+  });
+
+  describe('attemptBootSilentReauth() _isRefreshInProgress guard (AC9)', () => {
+    it('does not call requestAccessToken when _isRefreshInProgress is already true', async () => {
+      const { tokenClientMock } = setupGisMock({ callbackWithToken: true });
+      const loadSpy = vi.spyOn(service as any, 'loadGisScript').mockResolvedValue(undefined);
+      (service as any)._isRefreshInProgress = true;
+
+      await (service as any).attemptBootSilentReauth();
+
+      expect(tokenClientMock.requestAccessToken).not.toHaveBeenCalled();
+      loadSpy.mockRestore();
+    });
+  });
+
+  describe('handleTokenResponse persists token to IDB (AC1)', () => {
+    it('calls idb.set with correct shape on successful token response', () => {
+      vi.spyOn(service as any, 'scheduleTokenRefresh').mockImplementation(() => {});
+      (service as any).handleTokenResponse({
+        access_token: 'test-token-abc',
+        expires_in: '3600',
+        token_type: 'Bearer',
+        scope: 'https://www.googleapis.com/auth/spreadsheets',
+      });
+      expect(idbSpy.set).toHaveBeenCalledWith('appMeta', 'auth', expect.objectContaining({
+        accessToken: 'test-token-abc',
+        expiresAt: expect.any(Number),
+      }));
     });
   });
 
@@ -345,9 +476,7 @@ describe('AuthService', () => {
   describe('retryAll() on re-auth recovery', () => {
     it('calls retryAll() when isReauthPending was true on a successful token response', () => {
       service.isReauthPending.set(true);
-      // Stub scheduleTokenRefresh so it doesn't kick off a real timer
       vi.spyOn(service as any, 'scheduleTokenRefresh').mockImplementation(() => {});
-      // Simulate handleTokenResponse with a valid response
       (service as any).handleTokenResponse({
         access_token: 'new-token',
         expires_in: '3600',

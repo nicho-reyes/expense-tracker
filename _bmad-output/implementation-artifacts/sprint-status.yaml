@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08
-last_updated: 2026-05-09T23:59:00Z
+last_updated: 2026-05-10T00:00:00Z
 project: expense-dashboard
 
 project_key: NOKEY
@@ -61,7 +61,7 @@ development_status:
   2-4-edit-and-delete-entry-with-confirmation-and-undo: done
   2-5-syncqueue-insert-write-new-entries-to-google-sheets: done
   2-6-multi-year-entry-hydration-on-first-sheet-connect: backlog
-  2-7-persistent-auth-and-boot-time-silent-reauth: backlog
+  2-7-persistent-auth-and-boot-time-silent-reauth: done
   2-8-multi-line-expandable-remarks-field: backlog
   2-9-e2e-coverage-backfill-and-verification: backlog
   epic-2-retrospective: optional

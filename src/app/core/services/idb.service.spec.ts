@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { TestBed } from '@angular/core/testing';
-import { IdbService } from './idb.service';
+import { IdbService, PersistedAuth } from './idb.service';
 import { LocalEntry, SyncQueueItem, QueueState } from '../models/entry.model';
 
 // ── Test fixtures ──────────────────────────────────────────────────────────────
@@ -134,6 +134,23 @@ describe('IdbService', () => {
       expect(item.retryCount).toBe(3);
       expect(item.nextRetryAt).toBe(1700000060000);
       expect(item.errorMessage).toBe('network timeout');
+    });
+  });
+
+  describe('appMeta store — auth key (Story 2.7)', () => {
+    it('set then get round-trips PersistedAuth on ("appMeta", "auth")', async () => {
+      const record: PersistedAuth = { accessToken: 'tok-abc', expiresAt: Date.now() + 3600_000 };
+      await service.set<PersistedAuth>('appMeta', 'auth', record);
+      const result = await service.get<PersistedAuth>('appMeta', 'auth');
+      expect(result).toEqual(record);
+    });
+
+    it('delete("appMeta", "auth") removes the record', async () => {
+      const record: PersistedAuth = { accessToken: 'tok-abc', expiresAt: Date.now() + 3600_000 };
+      await service.set<PersistedAuth>('appMeta', 'auth', record);
+      await service.delete('appMeta', 'auth');
+      const result = await service.get<PersistedAuth>('appMeta', 'auth');
+      expect(result).toBeUndefined();
     });
   });
 

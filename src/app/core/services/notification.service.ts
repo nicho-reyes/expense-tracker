@@ -65,6 +65,8 @@ export class NotificationService {
         return `Cannot delete '${error.categoryName}' — ${error.entryCount} entries use this category`;
       case 'CATEGORY_NAME_DUPLICATE':
         return `A category named '${error.name}' already exists`;
+      case 'AUTH_SILENT_REAUTH_FAILED':
+        return 'Your session has expired. Your data is safely stored — sign in to resume syncing.';
     }
   }
 }

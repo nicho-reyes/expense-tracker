@@ -47,3 +47,29 @@ export async function idbSeedEntry(page: Page, entry: Record<string, unknown>): 
     entry,
   );
 }
+
+// Must be called before page.goto() so the record is present when AuthService.init() reads it.
+export async function idbSeedAuth(page: Page, record: Record<string, unknown>): Promise<void> {
+  await page.addInitScript((r: Record<string, unknown>) => {
+    const req = indexedDB.open('expense-dashboard', 1);
+    req.onsuccess = () => {
+      const tx = req.result.transaction('appMeta', 'readwrite');
+      tx.objectStore('appMeta').put(r, 'auth');
+    };
+  }, record);
+}
+
+export async function idbGetAuth(page: Page): Promise<unknown> {
+  return page.evaluate(() =>
+    new Promise((resolve, reject) => {
+      const req = indexedDB.open('expense-dashboard', 1);
+      req.onsuccess = () => {
+        const tx = req.result.transaction('appMeta', 'readonly');
+        const getReq = tx.objectStore('appMeta').get('auth');
+        getReq.onsuccess = () => resolve(getReq.result);
+        getReq.onerror = () => reject(getReq.error);
+      };
+      req.onerror = () => reject(req.error);
+    }),
+  );
+}
