@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { IdbService } from './idb.service';
 import { SheetsService } from './sheets.service';
+import { NotificationService } from './notification.service';
 import { AppError } from '../models/error.model';
 import {
   Category,
@@ -14,6 +15,7 @@ import {
 export class CategoriesService {
   private readonly idb = inject(IdbService);
   private readonly sheets = inject(SheetsService);
+  private readonly notification = inject(NotificationService);
 
   private readonly _categories = signal<Category[]>([]);
   private readonly _loadError = signal<AppError | null>(null);
@@ -25,7 +27,8 @@ export class CategoriesService {
 
   async init(): Promise<void> {
     try {
-      const cached = await this.idb.getAll<Category>('categories');
+      const raw = await this.idb.getAll<Category>('categories');
+      const cached = [...raw].sort((a, b) => a.position - b.position);
       if (cached.length) {
         this._categories.set(cached);
         this.injectCssProperties(cached);
@@ -37,6 +40,48 @@ export class CategoriesService {
         this._loadError.set(this.toAppError(err));
       }
     }
+  }
+
+  async reorder(reorderedIds: string[]): Promise<void> {
+    const prev = this._categories();
+    const byId = new Map(prev.map(c => [c.id, c]));
+
+    if (reorderedIds.length !== prev.length) {
+      const err: AppError = { type: 'IDB_ERROR', message: 'Reorder list length mismatch' };
+      this.notification.showError(err);
+      throw err;
+    }
+
+    if (new Set(reorderedIds).size !== reorderedIds.length) {
+      const err: AppError = { type: 'IDB_ERROR', message: 'Reorder list contains duplicate ids' };
+      this.notification.showError(err);
+      throw err;
+    }
+
+    const unknownId = reorderedIds.find(id => !byId.has(id));
+    if (unknownId) {
+      const err: AppError = { type: 'IDB_ERROR', message: `Unknown category id: ${unknownId}` };
+      this.notification.showError(err);
+      throw err;
+    }
+
+    const next: Category[] = reorderedIds.map((id, idx) => ({ ...byId.get(id)!, position: idx }));
+
+    this._categories.set(next);
+    try {
+      for (const cat of next) {
+        await this.idb.set('categories', cat.id, cat);
+      }
+    } catch (err) {
+      this._categories.set(prev);
+      const appErr = this.toIdbError(err);
+      this.notification.showError(appErr);
+      throw appErr;
+    }
+  }
+
+  async refreshFromSheet(): Promise<void> {
+    this.notification.showInfo('Category sync from Sheet will arrive in a later story.');
   }
 
   async retry(): Promise<void> {
@@ -73,7 +118,7 @@ export class CategoriesService {
       source = { type: 'column-b-fallback', tabName: activeTab };
     }
 
-    const next = this.assignDefaultColors(names, existingMap);
+    const next = [...this.assignDefaultColors(names, existingMap)].sort((a, b) => a.position - b.position);
 
     await this.idb.clear('categories');
     for (const cat of next) {
@@ -100,7 +145,7 @@ export class CategoriesService {
           id,
           name,
           color: prior?.color ?? DEFAULT_CATEGORY_PALETTE[acc.length % DEFAULT_CATEGORY_PALETTE.length],
-          position: acc.length,
+          position: prior?.position ?? acc.length,
         } satisfies Category);
         return acc;
       }, []);
@@ -111,6 +156,11 @@ export class CategoriesService {
     for (const cat of categories) {
       root.setProperty(`--color-${cat.id}`, cat.color);
     }
+  }
+
+  private toIdbError(err: unknown): AppError {
+    if (err && typeof err === 'object' && 'type' in err) return err as AppError;
+    return { type: 'IDB_ERROR', message: err instanceof Error ? err.message : String(err) };
   }
 
   private toAppError(err: unknown): AppError {

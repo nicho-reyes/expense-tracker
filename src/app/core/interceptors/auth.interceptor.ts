@@ -8,19 +8,18 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  const auth = inject(AuthService);
-  const token = auth.getAccessToken();
-
-  const clonedReq = token
+  const authService = inject(AuthService);
+  const token = authService.getAccessToken();
+  const authedReq = token
     ? req.clone({ headers: req.headers.set('Authorization', `Bearer ${token}`) })
     : req;
 
-  return next(clonedReq).pipe(
-    catchError((error: HttpErrorResponse) => {
-      if (error.status === 401) {
-        return auth.handleUnauthorized().pipe(
+  return next(authedReq).pipe(
+    catchError((error) => {
+      if (error instanceof HttpErrorResponse && error.status === 401) {
+        return authService.handleUnauthorized().pipe(
           switchMap((newToken) =>
-            next(req.clone({ headers: req.headers.set('Authorization', `Bearer ${newToken}`) }))
+            next(req.clone({ headers: req.headers.set('Authorization', `Bearer ${newToken}`) })),
           ),
         );
       }

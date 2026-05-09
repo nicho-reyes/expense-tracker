@@ -1,0 +1,26 @@
+.cm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  touch-action: pan-y;
+}
+
+.cm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--mat-sys-surface);
+  touch-action: manipulation;
+}
+
+.cm-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--mat-sys-outline);
+}
+
+.cdk-drag-preview { box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18); }
+.cdk-drag-placeholder { opacity: 0.2; }
+.cdk-drag-animating { transition: transform 200ms cubic-bezier(0, 0, 0.2, 1); }

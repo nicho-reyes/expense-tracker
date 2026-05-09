@@ -1,12 +1,22 @@
 <div class="p-4" style="color: var(--foreground);">
   <h2 class="text-xl font-semibold mb-6">Settings</h2>
 
-  <div class="flex items-center justify-between py-3 border-b" style="border-color: var(--border);">
-    <span class="text-base">Dark mode</span>
-    <mat-slide-toggle
-      [checked]="isDark()"
-      (change)="toggleTheme()"
-      aria-label="Toggle dark mode">
-    </mat-slide-toggle>
-  </div>
+  <section>
+    <h3 class="text-base font-medium mb-2">Categories</h3>
+    <app-category-manager />
+  </section>
+
+  <mat-divider class="my-4" />
+
+  <section>
+    <h3 class="text-base font-medium mb-2">Appearance</h3>
+    <div class="flex items-center justify-between py-3">
+      <span class="text-base">Dark mode</span>
+      <mat-slide-toggle
+        [checked]="isDark()"
+        (change)="toggleTheme()"
+        aria-label="Toggle dark mode">
+      </mat-slide-toggle>
+    </div>
+  </section>
 </div>

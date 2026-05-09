@@ -3,6 +3,7 @@ import { of, throwError } from 'rxjs';
 import { CategoriesService } from './categories.service';
 import { IdbService } from './idb.service';
 import { SheetsService } from './sheets.service';
+import { NotificationService } from './notification.service';
 import { Category, DEFAULT_CATEGORY_PALETTE, slugifyCategoryId } from '../models/category.model';
 
 describe('CategoriesService', () => {
@@ -21,6 +22,11 @@ describe('CategoriesService', () => {
     readActiveTabCategoryColumn: ReturnType<typeof vi.fn>;
     getActive2026TabName: ReturnType<typeof vi.fn>;
   };
+  let notificationSpy: {
+    showError: ReturnType<typeof vi.fn>;
+    showInfo: ReturnType<typeof vi.fn>;
+    showSuccess: ReturnType<typeof vi.fn>;
+  };
   let setPropertySpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -38,6 +44,11 @@ describe('CategoriesService', () => {
       readActiveTabCategoryColumn: vi.fn().mockReturnValue(of([])),
       getActive2026TabName: vi.fn().mockReturnValue(null),
     };
+    notificationSpy = {
+      showError: vi.fn(),
+      showInfo: vi.fn(),
+      showSuccess: vi.fn(),
+    };
     setPropertySpy = vi.spyOn(document.documentElement.style, 'setProperty');
 
     TestBed.configureTestingModule({
@@ -45,6 +56,7 @@ describe('CategoriesService', () => {
         CategoriesService,
         { provide: IdbService, useValue: idbSpy },
         { provide: SheetsService, useValue: sheetsSpy },
+        { provide: NotificationService, useValue: notificationSpy },
       ],
     });
     service = TestBed.inject(CategoriesService);
@@ -206,9 +218,127 @@ describe('CategoriesService', () => {
       expect(result[DEFAULT_CATEGORY_PALETTE.length].color).toBe(DEFAULT_CATEGORY_PALETTE[0]);
     });
 
-    it('sets position equal to array index', () => {
+    it('sets position equal to array index for new categories', () => {
       const result = service.assignDefaultColors(['A', 'B', 'C'], new Map());
       expect(result.map((c) => c.position)).toEqual([0, 1, 2]);
+    });
+
+    it('preserves prior position for existing categories on re-seed', () => {
+      const existing = new Map<string, Category>([
+        ['b', { id: 'b', name: 'B', color: '#222', position: 0 }],
+        ['a', { id: 'a', name: 'A', color: '#111', position: 1 }],
+      ]);
+      const result = service.assignDefaultColors(['A', 'B'], existing);
+      const byId = new Map(result.map(c => [c.id, c]));
+      expect(byId.get('a')?.position).toBe(1);
+      expect(byId.get('b')?.position).toBe(0);
+    });
+  });
+
+  describe('reorder()', () => {
+    const cats: Category[] = [
+      { id: 'a', name: 'Alpha', color: '#111', position: 0 },
+      { id: 'b', name: 'Beta', color: '#222', position: 1 },
+      { id: 'c', name: 'Gamma', color: '#333', position: 2 },
+    ];
+
+    beforeEach(() => {
+      idbSpy.getAll.mockResolvedValue(cats);
+    });
+
+    async function seedCategories() {
+      sheetsSpy.connectedSpreadsheetId.mockReturnValue(null);
+      await service.init();
+    }
+
+    it('reassigns position to array index matching input order (AC2)', async () => {
+      await seedCategories();
+      await service.reorder(['c', 'a', 'b']);
+      const result = service.categories();
+      expect(result[0]).toMatchObject({ id: 'c', position: 0 });
+      expect(result[1]).toMatchObject({ id: 'a', position: 1 });
+      expect(result[2]).toMatchObject({ id: 'b', position: 2 });
+    });
+
+    it('updates the signal before any IdbService.set resolves (optimistic AC3)', async () => {
+      await seedCategories();
+      let signalDuringWrite: Category[] = [];
+      idbSpy.set.mockImplementation(async () => {
+        signalDuringWrite = service.categories();
+      });
+      await service.reorder(['b', 'a', 'c']);
+      expect(signalDuringWrite[0].id).toBe('b');
+    });
+
+    it('calls IdbService.set once per category in input order (AC2)', async () => {
+      await seedCategories();
+      await service.reorder(['c', 'a', 'b']);
+      const setCalls = idbSpy.set.mock.calls.filter((c: unknown[]) => c[0] === 'categories');
+      expect(setCalls).toHaveLength(3);
+      expect(setCalls[0][2]).toMatchObject({ id: 'c', position: 0 });
+      expect(setCalls[1][2]).toMatchObject({ id: 'a', position: 1 });
+      expect(setCalls[2][2]).toMatchObject({ id: 'b', position: 2 });
+    });
+
+    it('rolls back signal and surfaces IDB_ERROR when IdbService.set rejects (AC8)', async () => {
+      await seedCategories();
+      const originalOrder = service.categories().map(c => c.id);
+      idbSpy.set.mockRejectedValue(new Error('disk full'));
+      await expect(service.reorder(['c', 'a', 'b'])).rejects.toMatchObject({ type: 'IDB_ERROR' });
+      expect(service.categories().map(c => c.id)).toEqual(originalOrder);
+      expect(notificationSpy.showError).toHaveBeenCalledWith(expect.objectContaining({ type: 'IDB_ERROR' }));
+    });
+
+    it('throws IDB_ERROR before signal mutation when length mismatches', async () => {
+      await seedCategories();
+      const originalOrder = service.categories().map(c => c.id);
+      await expect(service.reorder(['a', 'b'])).rejects.toMatchObject({ type: 'IDB_ERROR' });
+      expect(service.categories().map(c => c.id)).toEqual(originalOrder);
+      expect(idbSpy.set).not.toHaveBeenCalledWith('categories', expect.anything(), expect.anything());
+      expect(notificationSpy.showError).toHaveBeenCalledWith(expect.objectContaining({ type: 'IDB_ERROR' }));
+    });
+
+    it('throws IDB_ERROR before signal mutation when id is unknown', async () => {
+      await seedCategories();
+      const originalOrder = service.categories().map(c => c.id);
+      await expect(service.reorder(['a', 'b', 'unknown'])).rejects.toMatchObject({ type: 'IDB_ERROR' });
+      expect(service.categories().map(c => c.id)).toEqual(originalOrder);
+      expect(notificationSpy.showError).toHaveBeenCalledWith(expect.objectContaining({ type: 'IDB_ERROR' }));
+    });
+
+    it('throws IDB_ERROR before signal mutation when reorderedIds contains duplicates', async () => {
+      await seedCategories();
+      const originalOrder = service.categories().map(c => c.id);
+      await expect(service.reorder(['a', 'a', 'b'])).rejects.toMatchObject({ type: 'IDB_ERROR' });
+      expect(service.categories().map(c => c.id)).toEqual(originalOrder);
+      expect(idbSpy.set).not.toHaveBeenCalledWith('categories', expect.anything(), expect.anything());
+      expect(notificationSpy.showError).toHaveBeenCalledWith(expect.objectContaining({ type: 'IDB_ERROR' }));
+    });
+
+    it('does not invoke any SheetsService method during reorder (AC5)', async () => {
+      await seedCategories();
+      vi.clearAllMocks();
+      await service.reorder(['a', 'b', 'c']);
+      expect(sheetsSpy.ensureLoaded).not.toHaveBeenCalled();
+      expect(sheetsSpy.connectedSpreadsheetId).not.toHaveBeenCalled();
+      expect(sheetsSpy.findCategoriesTab).not.toHaveBeenCalled();
+      expect(sheetsSpy.readCategoriesTabColumn).not.toHaveBeenCalled();
+      expect(sheetsSpy.readActiveTabCategoryColumn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('refreshFromSheet()', () => {
+    it('calls notification.showInfo with placeholder message (AC4 stub)', async () => {
+      await service.refreshFromSheet();
+      expect(notificationSpy.showInfo).toHaveBeenCalledWith(
+        expect.stringContaining('later story'),
+      );
+    });
+
+    it('does not call any SheetsService HTTP method (AC5 — stub only)', async () => {
+      await service.refreshFromSheet();
+      expect(sheetsSpy.ensureLoaded).not.toHaveBeenCalled();
+      expect(sheetsSpy.readCategoriesTabColumn).not.toHaveBeenCalled();
     });
   });
 

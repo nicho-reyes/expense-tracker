@@ -1,14 +1,7 @@
 <div class="auth-container">
   <div class="auth-card">
     <h1 class="auth-title">Expense Dashboard</h1>
-
-    @if (isReauthMode()) {
-      <p class="reauth-notice">
-        Your session has expired. Your data is safely stored — sign in to resume syncing.
-      </p>
-    } @else {
-      <p class="auth-subtitle">Sign in to access your Google Sheets expense data</p>
-    }
+    <p class="auth-subtitle">Sign in to access your Google Sheets expense data</p>
 
     <button
       mat-raised-button

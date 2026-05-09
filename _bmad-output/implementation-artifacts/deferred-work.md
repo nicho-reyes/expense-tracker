@@ -17,6 +17,7 @@
 - No IDB transaction wrapping the `clear` + per-category `set` loop — partial write on tab crash leaves categories store corrupted; requires IdbService architecture change. [categories.service.ts:seedFromSheet]
 - `idb.set` for categories casts `value as Category` without runtime type check — TypeScript overloads enforce at compile time but a JS caller could bypass; pre-existing IdbService pattern. [idb.service.ts:set]
 
+
 ## Deferred from: code review of 1-4-first-run-setup-and-google-sheets-discovery (2026-05-08)
 
 - `ensureLoaded` not concurrency-safe — two simultaneous guard activations both see `_loadedFromIdb === false` and race to read IDB; gate with a cached `Promise<void>`. Unlikely in serial Angular router navigation; revisit if guard is called from non-router contexts. [sheets.service.ts:ensureLoaded]

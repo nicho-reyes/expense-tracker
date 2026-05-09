@@ -1,11 +1,13 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatDividerModule } from '@angular/material/divider';
+import { CategoryManagerComponent } from './category-manager/category-manager.component';
 
 @Component({
   selector: 'app-settings',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatSlideToggleModule],
+  imports: [MatSlideToggleModule, MatDividerModule, CategoryManagerComponent],
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.scss',
 })
