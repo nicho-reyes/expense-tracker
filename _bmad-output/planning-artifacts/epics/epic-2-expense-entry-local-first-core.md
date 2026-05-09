@@ -256,3 +256,143 @@ So that my Sheet stays up to date without any manual export step.
 | E2-07 | After entry save → `syncQueue` IDB store contains 1 PENDING record |
 
 ---
+
+## Story 2.6: Multi-year entry hydration on first sheet connect
+
+As Nick,
+I want every existing entry in my Sheet's 2026-schema year tabs (current and any past years) to load into the app on first connect,
+So that switching devices or reinstalling does not lose visibility into any data already in my Sheet.
+
+**Scope note:** 2.6 hydrates the canonical 2026-schema year tabs only (e.g. `2026`, future `2027`, and any past-year tabs that already use the 2026 column layout). The legacy **2025** tab uses a different 4-column schema and is intentionally left to Story 3.6, which adds the legacy column mapping plus read-only enforcement. Once 3.6 ships, 2025 entries also become visible — but waiting on 3.6 must not block 2026-schema hydration.
+
+**Acceptance Criteria:**
+
+**Given** I have just completed first-run setup (Story 1.4) and the spreadsheet has been validated against the 2026 schema (Story 1.5's `schemaCache`)
+**When** the app finishes connecting and before the entry list renders
+**Then** `SheetsService` enumerates every tab in the spreadsheet whose name matches a year and whose header row passes 2026-schema validation, then reads every data row from each qualifying tab and maps it into a `LocalEntry` with `syncStatus: 'SYNCED'`, `isReadOnly: false`, and `targetTabName` set to the originating tab
+
+**Given** a tab's name does not match a year pattern, or its header row fails 2026-schema validation
+**When** hydration runs
+**Then** that tab is skipped (no mapping attempted, no error surfaced); legacy 2025 mapping is explicitly out of scope here and is owned by Story 3.6
+
+**Given** a row contains a column-F UUID
+**When** the row is mapped to a `LocalEntry`
+**Then** that UUID is used as the `LocalEntry.id` so re-hydration is idempotent — no duplicate IDB rows on a second connect, regardless of which tab the row came from
+
+**Given** a row has no column-F UUID (entry predates 2.5's UUID idempotency convention)
+**When** the row is mapped
+**Then** a deterministic id `hydrated-<tabName>-<row>` is assigned and stored, so subsequent hydrations do not re-import the same row as a new entry
+
+**Given** hydration is in progress
+**When** the user opens the app shell
+**Then** the entry list shows a hydration progress state distinguishable from the "no entries" empty state, the progress indicator reports per-tab progress (e.g. "Loading 2026 (1 of 2)…"), and the FAB QuickAdd remains tappable so logging is never blocked on hydration
+
+**Given** any qualifying tab fails schema validation mid-hydration
+**When** that specific tab is processed
+**Then** that tab is skipped with `AppError.SCHEMA_VALIDATION` surfaced via `NotificationService`, and hydration continues with remaining tabs — partial hydration is preferred over total failure, and the user sees a per-tab inline status
+
+**Given** hydration completes (fully or partially)
+**When** the run ends
+**Then** `appMeta.hydratedAt` is written with a per-tab map of `{ tabName: { lastHydratedAt, rowCount } }`; full hydration is NOT re-run on every launch — only when a tab is absent from the map or when the user explicitly triggers a re-sync (deferred to Epic 3)
+
+**Given** a Sheets API read for any individual tab fails (network, 5xx, quota)
+**When** the failure surfaces
+**Then** that tab is left in "deferred" state in `appMeta.hydratedAt` so retry resumes only the failed tab — successfully hydrated tabs are not re-read
+
+**Given** Story 3.6's legacy 2025 hydration and Story 3.7's past-year edit/delete write-back land later
+**When** they integrate
+**Then** 2.6 remains the canonical multi-tab hydration entry point — 3.6 plugs in the legacy mapper for 2025 tabs, and 3.7 reuses 2.6's hydrated rows for row-resolution rather than re-reading
+
+---
+
+## Story 2.7: Persistent auth and boot-time silent re-authentication
+
+As Nick,
+I want to stay signed in across browser restarts so I don't have to manually re-authenticate every time I open the app,
+So that the local-first UX is not undermined by a forced auth roundtrip on every cold launch.
+
+**Background:** Story 1.3 implemented in-session silent token refresh (proactive 5-min-before-expiry timer + reactive 401 handling), but stored the access token expiry in `sessionStorage` — wiped on tab/browser close — and the boot path routes straight to `/auth` whenever no in-memory token is present. As a result, every cold launch forces a fresh OAuth roundtrip even though the user's underlying Google session is typically still valid. This story closes that gap by persisting the token to IDB and adding a boot-time silent re-auth attempt before any visible `/auth` redirect.
+
+**Acceptance Criteria:**
+
+**Given** I successfully authenticate (via Story 1.2 / 1.3 / a re-auth prompt)
+**When** the access token is received
+**Then** the token and its `expiresAt` timestamp are written to the `appMeta` IDB store (key `auth.accessToken` and `auth.tokenExpiresAt`) — `sessionStorage` is no longer the durable store for these values
+
+**Given** I close my browser/tab while signed in and reopen the app within the token's remaining lifetime
+**When** `AuthService.init()` runs at boot
+**Then** the persisted token is loaded from `appMeta`, the proactive-refresh timer is rescheduled relative to its remaining lifetime, and no auth UI is shown — the app proceeds directly to its post-auth state
+
+**Given** I reopen the app after the persisted access token has expired but my Google session cookie is still valid
+**When** `AuthService.init()` runs at boot
+**Then** before any redirect to `/auth`, the service attempts a silent re-auth via GIS `requestAccessToken({ prompt: 'none' })`; if a fresh token is returned within the existing `SILENT_REFRESH_TIMEOUT_MS` window, it is persisted to IDB and the app proceeds without showing auth UI
+
+**Given** boot-time silent re-auth fails (Google session cookie absent, account revoked, network failure, GIS error)
+**When** the failure surfaces
+**Then** an `AppError.AUTH_SILENT_REAUTH_FAILED` is emitted (a new variant — extends the discriminated union by one), the persisted token in `appMeta` is cleared, and the app routes to `/auth` with the existing "Your session has expired. Your data is safely stored — sign in to resume syncing." banner from Story 1.3
+
+**Given** I sign out via the existing `signOut()` flow
+**When** the sign-out completes
+**Then** the persisted token and expiry are cleared from `appMeta` in addition to the existing `sessionStorage` cleanup, and the proactive-refresh timer is cleared as before
+
+**Given** Story 2.6's hydration runs on first sheet connect
+**When** boot-time silent re-auth has succeeded with a persisted token
+**Then** hydration proceeds against the restored token without any user-visible delay beyond what 2.6 already specifies — the auth restore runs first in the boot chain, hydration second
+
+**Given** the persisted token's `expiresAt` is missing, malformed, or in the past on boot
+**When** the service evaluates persisted state
+**Then** the persisted record is treated as absent (purge + fall through to silent re-auth) — no half-validated token is ever sent to Sheets
+
+**Given** XSS is the dominant token-exfiltration risk for a static-hosted SPA
+**When** evaluating the IDB-vs-sessionStorage trade
+**Then** Dev Notes explicitly document the choice: tokens persist in IDB so cold launches are silent; the security delta vs sessionStorage is small for a single-user, no-third-party-script app, and is justified by the persistent-auth UX contract — this is a deliberate trade, not an oversight
+
+**Given** boot-time silent re-auth is in flight
+**When** the user backgrounds and re-foregrounds the tab
+**Then** the in-flight attempt is not duplicated — the existing `_isRefreshInProgress` guard from Story 1.3 is reused
+
+---
+
+## Story 2.8: Multi-line expandable Remarks field
+
+As Nick,
+I want the Remarks field to be a multi-line, expandable text area instead of a single-line input,
+So that I can write fuller notes ("Coffee with Anna at the Lindenhof place — discussed Q3 plans") without my text being truncated or hidden behind a scroll.
+
+**Background:** Story 2.2 (merged) and Story 2.4 (backlog spec) both currently use `<input matInput>` for Remarks — single-line. The PRD's product-scope item **E3** explicitly requires "Large remarks field — multi-line, expandable on tap"; this is also reflected in FR4 ("free-text remarks of any length"). 2.8 closes this regression with a small targeted change.
+
+**Acceptance Criteria:**
+
+**Given** I open the QuickAdd bottom sheet (from Story 2.2)
+**When** the Remarks field renders
+**Then** it is a `<textarea matInput>` with `cdkTextareaAutosize`, `cdkAutosizeMinRows="1"`, `cdkAutosizeMaxRows="6"` — collapsed to a single visual row by default
+
+**Given** the Remarks field is collapsed
+**When** I focus or tap the field
+**Then** the field expands to show the typed content's natural height (up to the 6-row max) without modal layout shift — the bottom sheet's pinned Save button stays visible
+
+**Given** I type more than 6 visual rows of content
+**When** the cap is reached
+**Then** the textarea becomes internally scrollable (no further height growth) so the bottom sheet's overall height remains stable and the Save button stays reachable
+
+**Given** I open the entry edit sheet (from Story 2.4)
+**When** the Remarks field renders
+**Then** it uses the same `<textarea matInput>` + `cdkTextareaAutosize` configuration so edit-mode visuals match QuickAdd-mode visuals — no behavioural divergence between create and edit flows
+
+**Given** the field expands beyond the initial single-row collapsed height
+**When** screen-reader users encounter the field
+**Then** the field is announced as a multi-line text input (native `<textarea>` semantics) — no manual ARIA overrides required
+
+**Given** I have entered multi-line remarks
+**When** the entry is saved
+**Then** newline characters are preserved exactly in `LocalEntry.remarks` and round-tripped to the Sheet (Sheets API accepts `\n` in cell values without transformation)
+
+**Given** the entry list renders an entry with multi-line remarks (Story 2.3)
+**When** the row is rendered
+**Then** the row collapses multi-line remarks visually to a single-line preview using CSS `text-overflow: ellipsis` + `white-space: nowrap` — the row height does NOT vary by remarks length, preserving 2.3's stable list rhythm. The entry edit sheet (Story 2.4) is the surface where the full multi-line content is viewable and editable.
+
+**Given** the change touches a merged story (2.2)
+**When** the implementation lands
+**Then** the patch is contained to the QuickAddSheetComponent's template + SCSS (no signal/service surface changes); migration risk is zero because the data shape (`LocalEntry.remarks: string`) is unchanged — single-line remarks already in IDB and Sheets continue to render correctly in the new textarea
+
+---

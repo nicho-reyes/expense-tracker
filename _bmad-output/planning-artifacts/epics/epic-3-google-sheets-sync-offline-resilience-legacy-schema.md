@@ -286,3 +286,107 @@ So that I can correct historical entries without switching to the Sheet directly
 | E3-08 | Manual retry on conflict → resolves to synced state |
 
 ---
+
+## Story 3.8: Manual re-sync from Sheets with conflict resolution
+
+As Nick,
+I want to manually re-sync the app from my Sheet whenever I edit it directly (typo fixes, mass corrections, or imports done outside the app),
+So that the Sheet remains the authoritative source of truth and my edits there are reflected in the app without reinstalling.
+
+**Background:** Story 2.6 hydrates IDB on first connect, but treats Sheets as frozen afterward. This story reopens that channel as a user-controlled action — closing the loop on the PRD's "Sheets is the persistent source of truth" promise.
+
+**Acceptance Criteria:**
+
+**Given** the app has completed first-connect hydration (Story 2.6)
+**When** I navigate to Settings
+**Then** I see a "Re-sync from Sheets" action with a "Last re-synced: <relative-timestamp>" line, distinct from "Sync to Sheets" (the existing outbound queue retry)
+
+**Given** I trigger Re-sync from Sheets
+**When** the operation runs
+**Then** every 2026-schema year tab is re-read using the same `HydrationService` enumeration logic from Story 2.6 — no parallel implementation; this story extends `HydrationService` rather than duplicating
+
+**Given** a row read from Sheets has a column-F UUID matching an existing IDB entry whose `syncStatus` is `SYNCED`
+**When** the row is reconciled
+**Then** the IDB entry is overwritten with the Sheet row (Sheet wins) — this is the canonical source-of-truth behaviour
+
+**Given** a row read from Sheets has a column-F UUID matching an existing IDB entry whose `syncStatus` is `PENDING` or `SYNC_ERROR`
+**When** the row is reconciled
+**Then** the IDB entry is preserved (local pending edit is NOT overwritten) and a per-row reconciliation report records "skipped — pending local change" so the user is not silently surprised
+
+**Given** a row read from Sheets has no matching IDB entry
+**When** the row is reconciled
+**Then** the entry is inserted into IDB with `syncStatus: 'SYNCED'`, mirroring 2.6's hydration behaviour
+
+**Given** an IDB entry with `syncStatus: 'SYNCED'` has no matching Sheet row in its `targetTabName` after a successful tab read
+**When** the reconciliation completes
+**Then** that entry is moved into a "Stale entries" list in the reconciliation report — NOT auto-deleted; the user reviews the list and can choose to delete or restore (deletion is destructive and must be explicit)
+
+**Given** the operation completes (fully or partially)
+**When** the reconciliation report is presented
+**Then** the user sees per-tab counts: rows-added, rows-overwritten, rows-skipped-pending, rows-stale, rows-failed; `appMeta.hydratedAt[tab]` is updated for each successfully reconciled tab
+
+**Given** any individual tab read fails (network, 5xx, quota)
+**When** the failure surfaces
+**Then** that tab is left as deferred in the reconciliation report (mirrors 2.6's per-tab partial-hydration semantics); successfully reconciled tabs retain their updated `appMeta.hydratedAt[tab]` so a retry resumes only the failed tab
+
+**Given** a reconciliation is already in progress
+**When** the user triggers Re-sync from Sheets again
+**Then** the second trigger is debounced/no-op until the first completes — no concurrent reconciliations
+
+**Given** the Sheet's `Categories` tab content has changed since first connect (categories added, renamed, or reordered)
+**When** Re-sync runs
+**Then** `CategoriesService.seedFromSheet()` from Story 1.5 is also re-invoked so category metadata remains consistent — re-sync is a holistic snapshot, not just entries
+
+---
+
+## Story 3.9: Automatic re-sync triggers and TTL-based refresh policy
+
+As Nick,
+I want the app to automatically refresh from my Sheet at sensible lifecycle moments — when I open the app, when I switch back to the tab after a break, when my network reconnects, and when I re-authenticate — without me having to remember to tap "Re-sync from Sheets",
+So that the app stays in step with my Sheet by default and the manual re-sync action becomes a fallback rather than a routine.
+
+**Background:** The PRD's NFR-P5 specifies "Sheet data is refreshed on every app open and tab focus; within a session, data is cached with a 5-minute TTL." FR46 specifies "On successful re-authentication, the pending queue is flushed and the latest Sheet data is fetched." The domain-specific requirements add "On reconnect after offline period, Sheet data is refreshed immediately regardless of remaining session TTL." Story 3.8 delivers the manual reconciliation engine; this story wires that engine to the four lifecycle triggers the PRD requires, behind a single TTL-aware gate so we don't burn quota on every micro-event.
+
+**Acceptance Criteria:**
+
+**Given** I cold-launch the app and `appMeta.lastReconciledAt` is older than 5 minutes (or absent)
+**When** the boot chain runs (after `AuthService.init()` resolves successfully and after Story 2.6's first-connect hydration is complete)
+**Then** `HydrationService.runReconciliation()` is auto-invoked exactly once; if `lastReconciledAt` is within the 5-minute TTL, the call is skipped to honour NFR-P5
+
+**Given** I switch back to the app tab from another tab or window
+**When** the `visibilitychange` event fires with `document.visibilityState === 'visible'`
+**Then** `HydrationService.runReconciliation()` is auto-invoked **only if** `appMeta.lastReconciledAt` is older than 5 minutes — repeated focus events within the TTL window are no-ops to honour the cache contract
+
+**Given** the app's `OnlineStatusService` (Story 3.4) transitions from offline → online after an offline period
+**When** the transition fires
+**Then** `HydrationService.runReconciliation()` is auto-invoked **immediately**, ignoring the 5-minute TTL — per the domain requirement "On reconnect after offline period, Sheet data is refreshed immediately regardless of remaining session TTL"
+
+**Given** authentication succeeds (silent re-auth via Story 2.7's boot path, interactive re-auth via Story 1.3's `/auth` flow, or a fresh first-run auth via Story 1.2)
+**When** the auth-success signal fires
+**Then** `SyncQueueService.retryAll()` flushes the pending outbound queue (existing 1.3 behaviour) AND `HydrationService.runReconciliation()` is auto-invoked **immediately**, ignoring the TTL — per FR46 "the latest Sheet data is fetched"
+
+**Given** any of the four triggers fire while a reconciliation is already running
+**When** the trigger evaluates
+**Then** the second trigger is no-op (reuses 3.8's `isReconciling` signal guard) — concurrency safety is inherited, not re-implemented
+
+**Given** auto-triggered reconciliation surfaces stale entries or skipped-pending rows
+**When** the reconciliation completes
+**Then** the resulting `ReconciliationReport` from 3.8 is NOT auto-popped as a `MatDialog`; instead a passive sync indicator is updated (counts visible in `SyncStatusBar`) and the user can open the full report from Settings — auto-triggers must not interrupt active workflows
+
+**Given** auto-triggered reconciliation fails (network, 5xx, quota, schema)
+**When** the failure surfaces
+**Then** failure is recorded silently to the same `ReconciliationReport` as 3.8 manual runs and surfaced via `SyncStatusBar`'s existing error state — `NotificationService.showError` is NOT used for auto-trigger failures (only manual triggers get loud errors per existing UX boundary that "errors only" snackbars are user-initiated)
+
+**Given** I have signed out (Stories 1.3, 2.7)
+**When** auto-triggers evaluate
+**Then** every auto-trigger is gated on `AuthService.isAuthenticated() === true` — no reconciliation attempts fire while the user is signed out, even if `online` or `visibilitychange` events occur
+
+**Given** the app is running in a background tab and the network reconnects
+**When** the `online` event fires while `document.visibilityState === 'hidden'`
+**Then** reconciliation still runs (visibility is not a gate for reconnect — reconnect is the user-impactful event); on next foreground, no duplicate trigger fires because 3.8's `isReconciling` guard plus the updated `lastReconciledAt` prevent it
+
+**Given** auto-trigger logic introduces a new debounce window for `visibilitychange` (rapid Cmd-Tab between tabs)
+**When** events fire in quick succession
+**Then** events within a 1-second debounce window collapse to a single evaluation — protects against quota burn on rapid tab switching even before the TTL gate fires
+
+---

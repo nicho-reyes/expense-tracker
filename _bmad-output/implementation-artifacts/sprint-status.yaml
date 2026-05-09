@@ -60,6 +60,9 @@ development_status:
   2-3-entry-list-view-and-entryrowcomponent: done
   2-4-edit-and-delete-entry-with-confirmation-and-undo: backlog
   2-5-syncqueue-insert-write-new-entries-to-google-sheets: done
+  2-6-multi-year-entry-hydration-on-first-sheet-connect: backlog
+  2-7-persistent-auth-and-boot-time-silent-reauth: backlog
+  2-8-multi-line-expandable-remarks-field: backlog
   epic-2-retrospective: optional
 
   # Epic 3: Google Sheets Sync, Offline Resilience & Legacy Schema
@@ -71,6 +74,8 @@ development_status:
   3-5-pre-sync-review-screen-view-edit-and-cancel-queued-entries: backlog
   3-6-2025-legacy-tab-read-only-mode-with-column-mapping: backlog
   3-7-past-year-2026-schema-tab-edit-and-delete-with-write-back: backlog
+  3-8-manual-resync-from-sheets-with-conflict-resolution: backlog
+  3-9-automatic-resync-triggers-and-ttl-refresh-policy: backlog
   epic-3-retrospective: optional
 
   # Epic 4: Dashboard & Spending Insights
