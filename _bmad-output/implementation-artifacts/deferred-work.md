@@ -10,6 +10,13 @@
 - `IdbService.get<T>` / `set<T>` constrained to `'appMeta'` store; all other store access via raw `getDb()` with no centralized `IDB_ERROR` mapping. Acceptable for scaffold; revisit if IDB errors prove hard to trace. [idb.service.ts:52]
 - `IdbService.get<T>` casts `unknown` to `T` with no runtime Zod validation — type safety is asserted not enforced for appMeta values. Low risk for single-user app; if corruption is observed, add per-key Zod schemas. [idb.service.ts:53]
 
+## Deferred from: code review of 1-5-category-registry-seeding-and-css-custom-property-injection (2026-05-09)
+
+- Stale CSS custom properties persist when categories are removed from the sheet — `injectCssProperties` never calls `removeProperty`; relevant when category management (Story 5.x) ships. [categories.service.ts:injectCssProperties]
+- `getActive2026TabName` returns first '2026' entry via `Object.entries` — non-deterministic with multiple 2026-schema tabs; year-aware selection added in a later story per spec. [sheets.service.ts:getActive2026TabName]
+- No IDB transaction wrapping the `clear` + per-category `set` loop — partial write on tab crash leaves categories store corrupted; requires IdbService architecture change. [categories.service.ts:seedFromSheet]
+- `idb.set` for categories casts `value as Category` without runtime type check — TypeScript overloads enforce at compile time but a JS caller could bypass; pre-existing IdbService pattern. [idb.service.ts:set]
+
 ## Deferred from: code review of 1-4-first-run-setup-and-google-sheets-discovery (2026-05-08)
 
 - `ensureLoaded` not concurrency-safe — two simultaneous guard activations both see `_loadedFromIdb === false` and race to read IDB; gate with a cached `Promise<void>`. Unlikely in serial Angular router navigation; revisit if guard is called from non-router contexts. [sheets.service.ts:ensureLoaded]

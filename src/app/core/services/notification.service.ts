@@ -51,6 +51,8 @@ export class NotificationService {
         return `Data validation error: ${error.message}`;
       case 'SCHEMA_MISMATCH':
         return `Schema mismatch in tab "${error.tabName}"`;
+      case 'UNKNOWN_ERROR':
+        return error.message;
     }
   }
 }

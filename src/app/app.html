@@ -1,3 +1,10 @@
+@if (categoriesService.loadError()) {
+  <div role="alert" class="bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100 px-4 py-2 flex items-center justify-between">
+    <span>Could not load categories — tap to retry</span>
+    <button mat-button (click)="onRetryCategories()">Retry</button>
+  </div>
+}
+
 <div class="flex flex-col min-h-dvh" style="background-color: var(--background);">
   <main class="flex-1 overflow-y-auto pb-20" style="color: var(--foreground);">
     <router-outlet />

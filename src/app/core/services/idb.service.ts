@@ -61,14 +61,32 @@ export class IdbService {
     });
   }
 
-  async get<T>(store: 'appMeta', key: string): Promise<T | undefined> {
+  async get<T>(store: 'appMeta', key: string): Promise<T | undefined>;
+  async get<T>(store: 'categories', key: string): Promise<T | undefined>;
+  async get<T>(store: 'appMeta' | 'categories', key: string): Promise<T | undefined> {
     const db = await this.dbPromise;
     return db.get(store, key) as Promise<T | undefined>;
   }
 
-  async set<T>(store: 'appMeta', key: string, value: T): Promise<void> {
+  async set<T>(store: 'appMeta', key: string, value: T): Promise<void>;
+  async set<T>(store: 'categories', key: string, value: T): Promise<void>;
+  async set<T>(store: 'appMeta' | 'categories', key: string, value: T): Promise<void> {
     const db = await this.dbPromise;
-    await db.put(store, value as unknown, key);
+    if (store === 'categories') {
+      await db.put(store, value as Category);
+    } else {
+      await db.put(store, value as unknown, key);
+    }
+  }
+
+  async getAll<T>(store: 'categories'): Promise<T[]> {
+    const db = await this.dbPromise;
+    return db.getAll(store) as Promise<T[]>;
+  }
+
+  async clear(store: 'categories'): Promise<void> {
+    const db = await this.dbPromise;
+    await db.clear(store);
   }
 
   getDb(): Promise<IDBPDatabase<ExpenseDashboardDb>> {

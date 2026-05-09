@@ -1,14 +1,25 @@
 import { TestBed } from '@angular/core/testing';
-import { RouterTestingHarness } from '@angular/router/testing';
 import { App } from './app';
-import { routes } from './app.routes';
 import { provideRouter } from '@angular/router';
+import { routes } from './app.routes';
+import { CategoriesService } from './core/services/categories.service';
+import { signal } from '@angular/core';
 
 describe('App', () => {
+  const categoriesSpy = {
+    categories: signal([]),
+    loadError: signal(null),
+    init: vi.fn().mockResolvedValue(undefined),
+    retry: vi.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideRouter(routes)],
+      providers: [
+        provideRouter(routes),
+        { provide: CategoriesService, useValue: categoriesSpy },
+      ],
     }).compileComponents();
   });
 

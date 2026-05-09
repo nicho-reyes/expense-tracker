@@ -50,3 +50,5 @@ Thumbs.db
 /test-results/
 /.claude/worktrees/
 /.idea/
+
+/docs/commit-messages.md

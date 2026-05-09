@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError, firstValueFrom } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 import { IdbService } from './idb.service';
 import { environment } from '../../../environments/environment';
 import { AppError } from '../models/error.model';
@@ -22,16 +22,27 @@ export class SheetsService {
   private readonly idb = inject(IdbService);
 
   private readonly _connectedSpreadsheetId = signal<string | null>(null);
+  private readonly _schemaCache = signal<Record<string, '2026' | '2025'>>({});
   private _loadedFromIdb = false;
+  private _ensureLoadedPromise: Promise<void> | null = null;
 
   readonly connectedSpreadsheetId = this._connectedSpreadsheetId.asReadonly();
   readonly isSheetConnected = computed(() => !!this._connectedSpreadsheetId());
+  readonly schemaCache = this._schemaCache.asReadonly();
 
   async ensureLoaded(): Promise<void> {
     if (this._loadedFromIdb) return;
-    const id = await this.idb.get<string>('appMeta', 'spreadsheetId');
-    this._connectedSpreadsheetId.set(id ?? null);
-    this._loadedFromIdb = true;
+    this._ensureLoadedPromise ??= (async () => {
+      const id = await this.idb.get<string>('appMeta', 'spreadsheetId');
+      this._connectedSpreadsheetId.set(id ?? null);
+      const cache = await this.idb.get<Record<string, '2026' | '2025'>>('appMeta', 'schemaCache');
+      this._schemaCache.set(cache ?? {});
+      this._loadedFromIdb = true;
+    })().catch((err) => {
+      this._ensureLoadedPromise = null;
+      throw err;
+    });
+    return this._ensureLoadedPromise;
   }
 
   extractSpreadsheetId(input: string): string | null {
@@ -113,6 +124,45 @@ export class SheetsService {
     await this.idb.set('appMeta', 'spreadsheetId', spreadsheetId);
     await this.idb.set('appMeta', 'schemaCache', schemaCache);
     this._connectedSpreadsheetId.set(spreadsheetId);
+    this._schemaCache.set(schemaCache);
+  }
+
+  async findCategoriesTab(spreadsheetId: string): Promise<{ tabName: 'Categories' } | null> {
+    const meta = await firstValueFrom(this.fetchSpreadsheetMeta(spreadsheetId));
+    const sheets = meta?.sheets ?? [];
+    const tab = sheets.find((s) => s.properties.title === 'Categories');
+    return tab ? { tabName: 'Categories' } : null;
+  }
+
+  readCategoriesTabColumn(spreadsheetId: string): Observable<string[]> {
+    const range = encodeURIComponent(`'Categories'!A2:A`);
+    const url = `${environment.sheetsApiBaseUrl}/${spreadsheetId}/values/${range}`;
+    return this.http.get<SheetsValueRange>(url).pipe(
+      map((res) => (res?.values ?? []).map((row) => (row[0] ?? '').trim()).filter((v) => v.length > 0)),
+      catchError((err: HttpErrorResponse) =>
+        throwError(() => ({ type: 'SHEETS_API', status: err.status, message: err.message }) satisfies AppError),
+      ),
+    );
+  }
+
+  readActiveTabCategoryColumn(spreadsheetId: string, tabName: string): Observable<string[]> {
+    const escaped = tabName.replace(/'/g, "''");
+    const range = encodeURIComponent(`'${escaped}'!B2:B`);
+    const url = `${environment.sheetsApiBaseUrl}/${spreadsheetId}/values/${range}`;
+    return this.http.get<SheetsValueRange>(url).pipe(
+      map((res) => (res?.values ?? []).map((row) => (row[0] ?? '').trim()).filter((v) => v.length > 0)),
+      catchError((err: HttpErrorResponse) =>
+        throwError(() => ({ type: 'SHEETS_API', status: err.status, message: err.message }) satisfies AppError),
+      ),
+    );
+  }
+
+  getActive2026TabName(): string | null {
+    const cache = this._schemaCache();
+    for (const [tabName, schema] of Object.entries(cache)) {
+      if (schema === '2026') return tabName;
+    }
+    return null;
   }
 
   private async readTabHeaderRow(spreadsheetId: string, tabName: string): Promise<TabSchemaResult> {

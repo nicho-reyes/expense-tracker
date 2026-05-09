@@ -9,4 +9,5 @@ export type AppError =
   | { type: 'NETWORK'; message: string }
   | { type: 'SYNC_FAILED'; entryId: string; message: string }
   | { type: 'IDB_ERROR'; message: string }
-  | { type: 'SCHEMA_MISMATCH'; tabName: string; expected: string[]; received: string[] };
+  | { type: 'SCHEMA_MISMATCH'; tabName: string; expected: string[]; received: string[] }
+  | { type: 'UNKNOWN_ERROR'; message: string };

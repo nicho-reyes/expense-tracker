@@ -154,10 +154,24 @@ describe('SheetsService', () => {
     it('is a no-op on the second call (does not re-read IDB)', async () => {
       idbSpy.get.mockResolvedValue('first-id');
       await service.ensureLoaded();
-      expect(idbSpy.get).toHaveBeenCalledTimes(1);
+      // Now calls idb.get twice: once for spreadsheetId, once for schemaCache
+      expect(idbSpy.get).toHaveBeenCalledTimes(2);
 
       await service.ensureLoaded();
-      expect(idbSpy.get).toHaveBeenCalledTimes(1);
+      expect(idbSpy.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('loads schemaCache from IDB into signal', async () => {
+      const cache = { '2026-tab': '2026' as const };
+      idbSpy.get.mockImplementation((_store: string, key: string) => {
+        if (key === 'spreadsheetId') return Promise.resolve('sid');
+        if (key === 'schemaCache') return Promise.resolve(cache);
+        return Promise.resolve(undefined);
+      });
+
+      await service.ensureLoaded();
+
+      expect(service.schemaCache()).toEqual(cache);
     });
   });
 
@@ -169,6 +183,128 @@ describe('SheetsService', () => {
       expect(idbSpy.set).toHaveBeenCalledWith('appMeta', 'spreadsheetId', 'new-id-456');
       expect(idbSpy.set).toHaveBeenCalledWith('appMeta', 'schemaCache', schemaCache);
       expect(service.connectedSpreadsheetId()).toBe('new-id-456');
+      expect(service.schemaCache()).toEqual(schemaCache);
+    });
+  });
+
+  describe('findCategoriesTab()', () => {
+    it("returns { tabName: 'Categories' } when a 'Categories' sheet is present", async () => {
+      const mockMeta = {
+        spreadsheetId: 'sid',
+        properties: { title: 'My Sheet' },
+        sheets: [
+          { properties: { title: 'Categories' } },
+          { properties: { title: '2026' } },
+        ],
+      };
+      httpSpy.get.mockReturnValue(of(mockMeta));
+
+      const result = await service.findCategoriesTab('sid');
+      expect(result).toEqual({ tabName: 'Categories' });
+    });
+
+    it('returns null when no matching tab is found', async () => {
+      const mockMeta = {
+        spreadsheetId: 'sid',
+        properties: { title: 'My Sheet' },
+        sheets: [{ properties: { title: '2026' } }],
+      };
+      httpSpy.get.mockReturnValue(of(mockMeta));
+
+      const result = await service.findCategoriesTab('sid');
+      expect(result).toBeNull();
+    });
+
+    it('performs case-sensitive match — does not match categories (lowercase)', async () => {
+      const mockMeta = {
+        spreadsheetId: 'sid',
+        properties: { title: 'My Sheet' },
+        sheets: [{ properties: { title: 'categories' } }],
+      };
+      httpSpy.get.mockReturnValue(of(mockMeta));
+
+      const result = await service.findCategoriesTab('sid');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('readCategoriesTabColumn()', () => {
+    it("uses URL-encoded 'Categories'!A2:A range", async () => {
+      httpSpy.get.mockReturnValue(of({ values: [['Food'], ['Transport']] }));
+      const { firstValueFrom: fvf } = await import('rxjs');
+
+      await fvf(service.readCategoriesTabColumn('my-sheet-id'));
+
+      const calledUrl: string = httpSpy.get.mock.calls[0][0];
+      expect(calledUrl).toContain(encodeURIComponent("'Categories'!A2:A"));
+    });
+
+    it('trims and filters empty values', async () => {
+      httpSpy.get.mockReturnValue(of({ values: [['  Food  '], [''], ['Transport']] }));
+      const { firstValueFrom: fvf } = await import('rxjs');
+
+      const result = await fvf(service.readCategoriesTabColumn('sid'));
+      expect(result).toEqual(['Food', 'Transport']);
+    });
+
+    it('maps HTTP error to SHEETS_API AppError', async () => {
+      httpSpy.get.mockReturnValue(throwError(() => ({ status: 403, message: 'Forbidden' })));
+      const { firstValueFrom: fvf } = await import('rxjs');
+
+      await expect(fvf(service.readCategoriesTabColumn('sid'))).rejects.toMatchObject({
+        type: 'SHEETS_API',
+        status: 403,
+      });
+    });
+  });
+
+  describe('readActiveTabCategoryColumn()', () => {
+    it('uses URL-encoded range with escaped tab name for column B', async () => {
+      httpSpy.get.mockReturnValue(of({ values: [] }));
+      const { firstValueFrom: fvf } = await import('rxjs');
+
+      await fvf(service.readActiveTabCategoryColumn('sid', '2026'));
+
+      const calledUrl: string = httpSpy.get.mock.calls[0][0];
+      expect(calledUrl).toContain(encodeURIComponent("'2026'!B2:B"));
+    });
+
+    it("escapes single quotes in tab name — Fred's 2026 → Fred''s 2026", async () => {
+      httpSpy.get.mockReturnValue(of({ values: [] }));
+      const { firstValueFrom: fvf } = await import('rxjs');
+
+      await fvf(service.readActiveTabCategoryColumn('sid', "Fred's 2026"));
+
+      const calledUrl: string = httpSpy.get.mock.calls[0][0];
+      expect(calledUrl).toContain(encodeURIComponent("'Fred''s 2026'!B2:B"));
+    });
+
+    it('trims and filters empty values', async () => {
+      httpSpy.get.mockReturnValue(of({ values: [[''], ['  Food  '], ['Transport'], ['']] }));
+      const { firstValueFrom: fvf } = await import('rxjs');
+
+      const result = await fvf(service.readActiveTabCategoryColumn('sid', '2026'));
+      expect(result).toEqual(['Food', 'Transport']);
+    });
+  });
+
+  describe('getActive2026TabName()', () => {
+    it('returns the first 2026 tab name from schemaCache', async () => {
+      const schemaCache = { '2026-data': '2026' as const, 'Old': '2025' as const };
+      await service.connectSheet('sid', schemaCache);
+
+      expect(service.getActive2026TabName()).toBe('2026-data');
+    });
+
+    it('returns null when no 2026 tab is in schemaCache', async () => {
+      const schemaCache = { 'Old': '2025' as const };
+      await service.connectSheet('sid', schemaCache);
+
+      expect(service.getActive2026TabName()).toBeNull();
+    });
+
+    it('returns null when schemaCache is empty', () => {
+      expect(service.getActive2026TabName()).toBeNull();
     });
   });
 });
