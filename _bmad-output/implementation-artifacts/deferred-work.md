@@ -48,6 +48,12 @@
 - ColorPickerDialog preview area has no `aria-live` region — color selection changes via preset or custom hex are not announced to screen readers (hex text is visible but not live). Low impact given the visual ring indicator. [color-picker.dialog.html]
 - Forced-colors / Windows High Contrast Mode: swatch selection ring (box-shadow) is suppressed; all swatches may render as system `ButtonFace`. No `outline` fallback exists. Enhancement for a future accessibility pass. [color-picker.dialog.html]
 
+## Deferred from: code review of 2-5-syncqueue-insert-write-new-entries-to-google-sheets (2026-05-09)
+
+- `_processItem` catch block leaves failed items in `PENDING` status forever — `retryAll()` only processes `SYNC_ERROR` items, so PENDING items that silently failed are permanently outside the retry path. Epic 3 Story 3.1 owns the full state machine with proper error state transitions. [`sync-queue.service.ts:146`]
+- `dequeue()`/`markSynced()` decrement `pendingCount` unconditionally regardless of item status — if called on a `SYNC_ERROR` item (Story 3.5 pre-sync review), `pendingCount` underflows while `errorCount` stays inflated. Story 3.5 should differentiate the two methods. [`sync-queue.service.ts:79`]
+- No in-flight guard in `_processItem` — concurrent `retryAll()` calls while `appendRow` is in-flight can submit the same item to Google Sheets twice, creating duplicate rows. Story 3.1 state machine should add an in-progress status. [`sync-queue.service.ts:125`]
+
 ## Deferred from: code review of 1-2-google-oauth-authentication-flow (2026-05-08)
 
 - GIS `callback` and `error_callback` closures captured at `initTokenClient` time have no teardown path — a stale callback can fire after the service is re-initialised in tests or if the app ever hot-replaces the service. No Angular `DestroyRef` or `ngOnDestroy` hook exists on the service. Acceptable for a `providedIn: 'root'` singleton with a single lifetime; add a destroy guard if the service scope ever changes. [auth.service.ts:119-124]

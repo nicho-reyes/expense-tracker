@@ -5,10 +5,12 @@ import { catchError, map } from 'rxjs/operators';
 import { IdbService } from './idb.service';
 import { environment } from '../../../environments/environment';
 import { AppError } from '../models/error.model';
+import { LocalEntry } from '../models/entry.model';
 import {
   SheetsSpreadsheet,
   SheetsSheetMeta,
   SheetsValueRange,
+  SheetsAppendResponse,
   TabSchemaResult,
   schema2026Validator,
   schema2025Validator,
@@ -163,6 +165,33 @@ export class SheetsService {
       if (schema === '2026') return tabName;
     }
     return null;
+  }
+
+  appendRow(spreadsheetId: string, tabName: string, entry: LocalEntry): Observable<SheetsAppendResponse> {
+    const escapedTabName = tabName.replace(/'/g, "''");
+    const range = encodeURIComponent(`'${escapedTabName}'!A:F`);
+    const url = `${environment.sheetsApiBaseUrl}/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const body = {
+      values: [[
+        entry.date,
+        entry.category,
+        String(entry.amount),
+        entry.remarks,
+        entry.month,
+        entry.id,
+      ]],
+    };
+    return this.http.post<SheetsAppendResponse>(url, body).pipe(
+      catchError((err: HttpErrorResponse) =>
+        throwError(() => ({
+          type: 'SHEETS_API',
+          status: err.status,
+          message: err.status === 429
+            ? 'Sheets quota exceeded — write queued for retry.'
+            : `Sheets write error (${err.status}): ${err.message}`,
+        }) satisfies AppError),
+      ),
+    );
   }
 
   private async readTabHeaderRow(spreadsheetId: string, tabName: string): Promise<TabSchemaResult> {

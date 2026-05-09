@@ -49,3 +49,10 @@ export interface SheetsSheetMeta {
     gridProperties: { rowCount: number; columnCount: number };
   };
 }
+
+export interface SheetsAppendResponse {
+  updates: {
+    updatedRange: string;
+    updatedRows: number;
+  };
+}

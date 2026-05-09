@@ -5,15 +5,31 @@ import { SheetsService } from './sheets.service';
 import { IdbService } from './idb.service';
 import { NotificationService } from './notification.service';
 import { SCHEMA_2026_HEADERS, SCHEMA_2025_HEADERS } from '../models/sheets.model';
+import { LocalEntry } from '../models/entry.model';
+
+const MOCK_ENTRY: LocalEntry = {
+  id: 'entry-uuid-sheets-test',
+  date: '2026-05-09',
+  month: '2026-05',
+  year: 2026,
+  category: 'Food',
+  amount: 12.5,
+  remarks: 'Lunch',
+  tabName: '2026',
+  schemaVersion: '2026',
+  sheetRowIndex: null,
+  syncStatus: 'pending',
+  isReadOnly: false,
+};
 
 describe('SheetsService', () => {
   let service: SheetsService;
-  let httpSpy: { get: ReturnType<typeof vi.fn> };
+  let httpSpy: { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn> };
   let idbSpy: { get: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> };
   let notificationSpy: { showError: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
-    httpSpy = { get: vi.fn() };
+    httpSpy = { get: vi.fn(), post: vi.fn() };
     idbSpy = { get: vi.fn().mockResolvedValue(undefined), set: vi.fn().mockResolvedValue(undefined) };
     notificationSpy = { showError: vi.fn() };
 
@@ -305,6 +321,64 @@ describe('SheetsService', () => {
 
     it('returns null when schemaCache is empty', () => {
       expect(service.getActive2026TabName()).toBeNull();
+    });
+  });
+
+  describe('appendRow()', () => {
+    it('posts to correct URL with valueInputOption=USER_ENTERED and insertDataOption=INSERT_ROWS', async () => {
+      httpSpy.post = vi.fn().mockReturnValue(of({ updates: { updatedRange: "'2026'!A2:F2", updatedRows: 1 } }));
+
+      await firstValueFrom(service.appendRow('my-sheet-id', '2026', MOCK_ENTRY));
+
+      const calledUrl: string = httpSpy.post.mock.calls[0][0];
+      expect(calledUrl).toContain('my-sheet-id');
+      expect(calledUrl).toContain('valueInputOption=USER_ENTERED');
+      expect(calledUrl).toContain('insertDataOption=INSERT_ROWS');
+      expect(calledUrl).toContain(encodeURIComponent("'2026'!A:F"));
+    });
+
+    it('sends row with correct column order [date, category, amount, remarks, month, uuid]', async () => {
+      httpSpy.post = vi.fn().mockReturnValue(of({ updates: { updatedRange: "'2026'!A2:F2", updatedRows: 1 } }));
+
+      await firstValueFrom(service.appendRow('sid', '2026', MOCK_ENTRY));
+
+      const body = httpSpy.post.mock.calls[0][1];
+      expect(body.values[0]).toEqual([
+        '2026-05-09',
+        'Food',
+        '12.5',
+        'Lunch',
+        '2026-05',
+        'entry-uuid-sheets-test',
+      ]);
+    });
+
+    it('maps 429 quota error to SHEETS_API AppError with quota message', async () => {
+      httpSpy.post = vi.fn().mockReturnValue(throwError(() => ({ status: 429, message: 'Too Many Requests' })));
+
+      await expect(firstValueFrom(service.appendRow('sid', '2026', MOCK_ENTRY))).rejects.toMatchObject({
+        type: 'SHEETS_API',
+        status: 429,
+        message: expect.stringContaining('quota'),
+      });
+    });
+
+    it('maps 503 transient error to SHEETS_API AppError', async () => {
+      httpSpy.post = vi.fn().mockReturnValue(throwError(() => ({ status: 503, message: 'Service Unavailable' })));
+
+      await expect(firstValueFrom(service.appendRow('sid', '2026', MOCK_ENTRY))).rejects.toMatchObject({
+        type: 'SHEETS_API',
+        status: 503,
+      });
+    });
+
+    it("escapes single quotes in tab name — Fred's 2026 → Fred''s 2026 in URL", async () => {
+      httpSpy.post = vi.fn().mockReturnValue(of({ updates: { updatedRange: "'Fred''s 2026'!A2:F2", updatedRows: 1 } }));
+
+      await firstValueFrom(service.appendRow('sid', "Fred's 2026", MOCK_ENTRY));
+
+      const calledUrl: string = httpSpy.post.mock.calls[0][0];
+      expect(calledUrl).toContain(encodeURIComponent("'Fred''s 2026'!A:F"));
     });
   });
 });
