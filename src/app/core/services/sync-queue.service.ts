@@ -128,6 +128,7 @@ export class SyncQueueService implements ISyncQueueService {
     const spreadsheetId = this.sheets.connectedSpreadsheetId();
     if (!spreadsheetId) return; // offline or unconnected — item stays PENDING
 
+    if (item.operation === 'CATEGORY_INSERT') return; // Epic 3 (Story 3.1) handles processor branch
     if (item.operation !== 'INSERT') return; // UPDATE/DELETE: Story 2.4
 
     const tabName = this.sheets.getActive2026TabName();

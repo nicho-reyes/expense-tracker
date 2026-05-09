@@ -1,11 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError, firstValueFrom } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { catchError, map, switchMap } from 'rxjs/operators';
 import { IdbService } from './idb.service';
 import { environment } from '../../../environments/environment';
 import { AppError } from '../models/error.model';
 import { LocalEntry } from '../models/entry.model';
+import { Category } from '../models/category.model';
 import {
   SheetsSpreadsheet,
   SheetsSheetMeta,
@@ -191,6 +192,70 @@ export class SheetsService {
             : `Sheets write error (${err.status}): ${err.message}`,
         }) satisfies AppError),
       ),
+    );
+  }
+
+  appendCategoryRow(category: Category): Observable<void> {
+    const id = this._connectedSpreadsheetId();
+    if (!id) {
+      return throwError(() => ({
+        type: 'SHEETS_API',
+        status: 0,
+        message: 'No connected sheet',
+      }) satisfies AppError);
+    }
+
+    const range = encodeURIComponent("'Categories'!A:D");
+    const url = `${environment.sheetsApiBaseUrl}/${id}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+    const body = { values: [[category.id, category.name, category.color, category.position]] };
+
+    return this.http.post(url, body).pipe(
+      catchError((err: HttpErrorResponse) => {
+        if (err.status === 400) {
+          return this.maybeCreateCategoriesTabAndRetry(id, category, err);
+        }
+        return throwError(() => ({
+          type: 'SHEETS_API',
+          status: err.status,
+          message: err.status === 403
+            ? 'No access to this spreadsheet — check sharing settings.'
+            : err.status === 429
+              ? 'Sheets quota exceeded — write queued for retry.'
+              : `Sheets write error (${err.status}): ${err.message}`,
+        }) satisfies AppError);
+      }),
+      map(() => void 0),
+    );
+  }
+
+  private maybeCreateCategoriesTabAndRetry(spreadsheetId: string, category: Category, _originalErr: HttpErrorResponse): Observable<void> {
+    const createTabUrl = `${environment.sheetsApiBaseUrl}/${spreadsheetId}:batchUpdate`;
+    const createBody = {
+      requests: [{ addSheet: { properties: { title: 'Categories' } } }],
+    };
+    return this.http.post(createTabUrl, createBody).pipe(
+      catchError((createErr: HttpErrorResponse) =>
+        throwError(() => ({
+          type: 'SHEETS_API',
+          status: createErr.status,
+          message: `Sheets write error (${createErr.status}): ${createErr.message}`,
+        }) satisfies AppError),
+      ),
+      switchMap(() => {
+        const range = encodeURIComponent("'Categories'!A:D");
+        const appendUrl = `${environment.sheetsApiBaseUrl}/${spreadsheetId}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+        const body = { values: [[category.id, category.name, category.color, category.position]] };
+        return this.http.post(appendUrl, body).pipe(
+          catchError((err: HttpErrorResponse) =>
+            throwError(() => ({
+              type: 'SHEETS_API',
+              status: err.status,
+              message: `Sheets write error (${err.status}): ${err.message}`,
+            }) satisfies AppError),
+          ),
+        );
+      }),
+      map(() => void 0),
     );
   }
 

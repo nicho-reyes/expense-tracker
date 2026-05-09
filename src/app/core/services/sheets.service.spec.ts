@@ -381,4 +381,56 @@ describe('SheetsService', () => {
       expect(calledUrl).toContain(encodeURIComponent("'Fred''s 2026'!A:F"));
     });
   });
+
+  describe('appendCategoryRow()', () => {
+    const MOCK_CATEGORY = { id: 'cat-uuid-1', name: 'Groceries', color: '#6366f1', position: 0 };
+
+    beforeEach(async () => {
+      idbSpy.get = vi.fn().mockImplementation(async (_store: string, key: string) => {
+        if (key === 'spreadsheetId') return 'fake-sheet-id';
+        return undefined;
+      });
+      await service.ensureLoaded();
+    });
+
+    it('posts to values/Categories!A:D:append with correct row payload', async () => {
+      httpSpy.post = vi.fn().mockReturnValue(of({ updates: { updatedRows: 1 } }));
+
+      await firstValueFrom(service.appendCategoryRow(MOCK_CATEGORY));
+
+      const [calledUrl, calledBody] = httpSpy.post.mock.calls[0];
+      expect(calledUrl).toContain(encodeURIComponent("'Categories'!A:D"));
+      expect(calledUrl).toContain(':append');
+      expect(calledBody.values[0]).toEqual([
+        MOCK_CATEGORY.id,
+        MOCK_CATEGORY.name,
+        MOCK_CATEGORY.color,
+        MOCK_CATEGORY.position,
+      ]);
+    });
+
+    it('HTTP 400 triggers tab creation then retries append', async () => {
+      httpSpy.post = vi.fn()
+        .mockReturnValueOnce(throwError(() => ({ status: 400, message: 'Invalid range' })))
+        .mockReturnValueOnce(of({ replies: [] }))
+        .mockReturnValueOnce(of({ updates: { updatedRows: 1 } }));
+
+      await firstValueFrom(service.appendCategoryRow(MOCK_CATEGORY));
+
+      expect(httpSpy.post).toHaveBeenCalledTimes(3);
+      const batchUpdateUrl: string = httpSpy.post.mock.calls[1][0];
+      expect(batchUpdateUrl).toContain(':batchUpdate');
+    });
+
+    it('HTTP 403 maps to AppError.SHEETS_API { status: 403 }', async () => {
+      httpSpy.post = vi.fn().mockReturnValue(
+        throwError(() => ({ status: 403, message: 'Forbidden' })),
+      );
+
+      await expect(firstValueFrom(service.appendCategoryRow(MOCK_CATEGORY))).rejects.toMatchObject({
+        type: 'SHEETS_API',
+        status: 403,
+      });
+    });
+  });
 });

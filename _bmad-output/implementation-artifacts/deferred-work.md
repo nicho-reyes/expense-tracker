@@ -54,6 +54,12 @@
 - `dequeue()`/`markSynced()` decrement `pendingCount` unconditionally regardless of item status — if called on a `SYNC_ERROR` item (Story 3.5 pre-sync review), `pendingCount` underflows while `errorCount` stays inflated. Story 3.5 should differentiate the two methods. [`sync-queue.service.ts:79`]
 - No in-flight guard in `_processItem` — concurrent `retryAll()` calls while `appendRow` is in-flight can submit the same item to Google Sheets twice, creating duplicate rows. Story 3.1 state machine should add an in-progress status. [`sync-queue.service.ts:125`]
 
+## Deferred from: code review of 5-3-create-and-delete-categories-with-sheet-write-back (2026-05-09)
+
+- E2E E5-08 IDB seeding race — `beforeEach` seeds categories into IDB before navigation with no `waitForFunction` guard; low-probability flakiness if IDB writes complete after `CategoriesService.init()` fires. [e2e/categories.spec.ts:E5-08]
+- UUID vs slug ID inconsistency — categories created via `create()` use `crypto.randomUUID()` for id; `seedFromSheet` uses `slugifyCategoryId(name)` as id; delete+recreate with same name produces a duplicate after next seed import. Pre-existing architectural decision. [categories.service.ts:202]
+- EntriesService signal may return empty `[]` if `delete()` is called before `EntriesService.init()` resolves (boot order: CategoriesService.init → EntriesService.init) — silently allows deletion of referenced categories. Theoretical, normal navigation requires user interaction after boot. [categories.service.ts:233]
+
 ## Deferred from: code review of 1-2-google-oauth-authentication-flow (2026-05-08)
 
 - GIS `callback` and `error_callback` closures captured at `initTokenClient` time have no teardown path — a stale callback can fire after the service is re-initialised in tests or if the app ever hot-replaces the service. No Angular `DestroyRef` or `ngOnDestroy` hook exists on the service. Acceptable for a `providedIn: 'root'` singleton with a single lifetime; add a destroy guard if the service scope ever changes. [auth.service.ts:119-124]

@@ -1,3 +1,10 @@
+<div class="cm-header">
+  <button mat-flat-button color="primary" (click)="onAddCategory()" type="button">
+    <mat-icon>add</mat-icon>
+    Add category
+  </button>
+</div>
+
 @if (categories().length === 0) {
   <div class="empty-state" role="status">
     <p>No categories yet — sync with your Sheet to load them.</p>
@@ -13,6 +20,12 @@
                 [style.background]="'var(--color-' + cat.id + ')'"
                 (click)="onColorTap(cat)"></button>
         <span class="cm-name">{{ cat.name }}</span>
+        <button mat-icon-button
+                [attr.aria-label]="'Delete ' + cat.name"
+                (click)="onDeleteCategory(cat)"
+                type="button">
+          <mat-icon>delete_outline</mat-icon>
+        </button>
         <button mat-icon-button cdkDragHandle aria-label="Reorder category">
           <mat-icon>drag_indicator</mat-icon>
         </button>

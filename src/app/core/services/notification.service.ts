@@ -53,6 +53,10 @@ export class NotificationService {
         return `Schema mismatch in tab "${error.tabName}"`;
       case 'UNKNOWN_ERROR':
         return error.message;
+      case 'CATEGORY_IN_USE':
+        return `Cannot delete '${error.categoryName}' — ${error.entryCount} entries use this category`;
+      case 'CATEGORY_NAME_DUPLICATE':
+        return `A category named '${error.name}' already exists`;
     }
   }
 }

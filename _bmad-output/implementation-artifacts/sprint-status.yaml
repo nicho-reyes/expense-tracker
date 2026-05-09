@@ -1,5 +1,5 @@
 # generated: 2026-05-08
-# last_updated: 2026-05-09T19:00:00Z
+# last_updated: 2026-05-09T23:30:00Z
 # project: expense-dashboard
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08
-last_updated: 2026-05-09T20:30:00Z
+last_updated: 2026-05-09T23:30:00Z
 project: expense-dashboard
 
 project_key: NOKEY
@@ -90,7 +90,7 @@ development_status:
   epic-5: in-progress
   5-1-categorymanager-settings-screen-with-drag-drop-reorder: done
   5-2-colorpicker-and-per-category-color-assignment: done
-  5-3-create-and-delete-categories-with-sheet-write-back: backlog
+  5-3-create-and-delete-categories-with-sheet-write-back: done
   epic-5-retrospective: optional
 
   # Epic 6: Entry Discovery, Search & Batch Entry

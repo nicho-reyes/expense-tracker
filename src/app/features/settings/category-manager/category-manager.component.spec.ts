@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { signal } from '@angular/core';
 import { CdkDragDrop } from '@angular/cdk/drag-drop';
+import { MatDialog } from '@angular/material/dialog';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { CategoryManagerComponent } from './category-manager.component';
 import { CategoriesService } from '../../../core/services/categories.service';
 import { Category } from '../../../core/models/category.model';
@@ -16,7 +18,10 @@ describe('CategoryManagerComponent', () => {
     categories: ReturnType<typeof signal<Category[]>>;
     reorder: ReturnType<typeof vi.fn>;
     refreshFromSheet: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
   };
+  let dialogSpy: { open: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     categoriesSignal = signal<Category[]>([catA, catB, catC]);
@@ -24,12 +29,16 @@ describe('CategoryManagerComponent', () => {
       categories: categoriesSignal,
       reorder: vi.fn().mockResolvedValue(undefined),
       refreshFromSheet: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+      update: vi.fn().mockResolvedValue(undefined),
     };
+    dialogSpy = { open: vi.fn().mockReturnValue({ afterClosed: vi.fn().mockReturnValue({ pipe: vi.fn(), subscribe: vi.fn() }) }) };
 
     await TestBed.configureTestingModule({
-      imports: [CategoryManagerComponent],
+      imports: [CategoryManagerComponent, NoopAnimationsModule],
       providers: [
         { provide: CategoriesService, useValue: categoriesServiceSpy },
+        { provide: MatDialog, useValue: dialogSpy },
       ],
     }).compileComponents();
   });
@@ -103,5 +112,31 @@ describe('CategoryManagerComponent', () => {
     const event = { previousIndex: 0, currentIndex: 1 } as CdkDragDrop<Category[]>;
     await comp.onDrop(event);
     expect(vibrateMock).toHaveBeenCalledWith(10);
+  });
+
+  it('renders a delete button per category row (AC4)', () => {
+    const fixture = createFixture();
+    const deleteBtns = fixture.debugElement.queryAll(By.css('[aria-label^="Delete "]'));
+    expect(deleteBtns).toHaveLength(3);
+  });
+
+  it('clicking delete button opens DeleteCategoryDialog (AC4)', async () => {
+    const fixture = createFixture();
+    const comp = fixture.componentInstance;
+    await comp.onDeleteCategory(catA);
+    expect(dialogSpy.open).toHaveBeenCalled();
+  });
+
+  it('clicking Add category button opens AddCategoryDialog (AC1)', async () => {
+    const fixture = createFixture();
+    const comp = fixture.componentInstance;
+    await comp.onAddCategory();
+    expect(dialogSpy.open).toHaveBeenCalled();
+  });
+
+  it('renders Add category button (AC1)', () => {
+    const fixture = createFixture();
+    const addBtn = fixture.debugElement.query(By.css('.cm-header button'));
+    expect(addBtn).not.toBeNull();
   });
 });

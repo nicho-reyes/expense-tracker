@@ -32,6 +32,7 @@ const QUEUE_PENDING: SyncQueueItem = {
   id: 'queue-1',
   operation: 'INSERT',
   entryData: ENTRY,
+  categoryData: null,
   targetEntryId: null,
   targetTabName: null,
   enqueuedAt: 1700000000000,

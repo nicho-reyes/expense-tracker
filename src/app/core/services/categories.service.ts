@@ -2,12 +2,15 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { IdbService } from './idb.service';
 import { SheetsService } from './sheets.service';
+import { SyncQueueService } from './sync-queue.service';
+import { EntriesService } from './entries.service';
 import { NotificationService } from './notification.service';
 import { AppError } from '../models/error.model';
 import {
   Category,
   CategorySource,
   DEFAULT_CATEGORY_PALETTE,
+  pickNextPaletteColor,
   slugifyCategoryId,
 } from '../models/category.model';
 
@@ -15,6 +18,8 @@ import {
 export class CategoriesService {
   private readonly idb = inject(IdbService);
   private readonly sheets = inject(SheetsService);
+  private readonly syncQueue = inject(SyncQueueService);
+  private readonly entriesService = inject(EntriesService);
   private readonly notification = inject(NotificationService);
 
   private readonly _categories = signal<Category[]>([]);
@@ -178,6 +183,75 @@ export class CategoriesService {
     }
     this._categories.update(arr => arr.map(c => c.id === category.id ? category : c));
     this.setCssVar(category.id, category.color);
+  }
+
+  async create({ name }: { name: string }): Promise<Category> {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      const err: AppError = { type: 'IDB_ERROR', message: 'Name is required' };
+      throw err;
+    }
+    const existing = this._categories();
+    const duplicate = existing.find(c => c.name.trim().toLowerCase() === trimmedName.toLowerCase());
+    if (duplicate) {
+      const err: AppError = { type: 'CATEGORY_NAME_DUPLICATE', name: trimmedName };
+      throw err;
+    }
+    const maxPosition = existing.length > 0 ? Math.max(...existing.map(c => c.position)) : -1;
+    const category: Category = {
+      id: crypto.randomUUID(),
+      name: trimmedName,
+      color: pickNextPaletteColor(existing),
+      position: maxPosition + 1,
+    };
+    try {
+      await this.idb.put('categories', category);
+    } catch (err) {
+      throw this.toIdbError(err);
+    }
+    this._categories.update(all => [...all, category]);
+    this.setCssVar(category.id, category.color);
+    try {
+      await firstValueFrom(this.sheets.appendCategoryRow(category));
+    } catch (err) {
+      const appErr = this.toAppError(err);
+      try {
+        await this.syncQueue.enqueue({
+          operation: 'CATEGORY_INSERT',
+          entryData: null,
+          categoryData: category,
+          targetEntryId: null,
+          targetTabName: null,
+        });
+      } catch {
+        // Enqueue failure is non-fatal — category already committed locally
+      }
+      this.notification.showError(appErr);
+    }
+    return category;
+  }
+
+  async delete(id: string): Promise<void> {
+    const cat = this._categories().find(c => c.id === id);
+    if (!cat) return;
+    const entries = this.entriesService.entries();
+    const refs = entries.filter(e => e.category === cat.name);
+    if (refs.length > 0) {
+      const err: AppError = {
+        type: 'CATEGORY_IN_USE',
+        categoryId: id,
+        categoryName: cat.name,
+        entryCount: refs.length,
+      };
+      throw err;
+    }
+    try {
+      await this.idb.delete('categories', id);
+    } catch (err) {
+      throw this.toIdbError(err);
+    }
+    this._categories.update(all => all.filter(c => c.id !== id));
+    this.removeCssVar(id);
   }
 
   removeCssVar(id: string): void {

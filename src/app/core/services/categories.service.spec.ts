@@ -1,8 +1,11 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { CategoriesService } from './categories.service';
 import { IdbService } from './idb.service';
 import { SheetsService } from './sheets.service';
+import { SyncQueueService } from './sync-queue.service';
+import { EntriesService } from './entries.service';
 import { NotificationService } from './notification.service';
 import { Category, DEFAULT_CATEGORY_PALETTE, slugifyCategoryId } from '../models/category.model';
 
@@ -12,6 +15,8 @@ describe('CategoriesService', () => {
     getAll: ReturnType<typeof vi.fn>;
     get: ReturnType<typeof vi.fn>;
     set: ReturnType<typeof vi.fn>;
+    put: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
     clear: ReturnType<typeof vi.fn>;
   };
   let sheetsSpy: {
@@ -21,7 +26,12 @@ describe('CategoriesService', () => {
     readCategoriesTabColumn: ReturnType<typeof vi.fn>;
     readActiveTabCategoryColumn: ReturnType<typeof vi.fn>;
     getActive2026TabName: ReturnType<typeof vi.fn>;
+    appendCategoryRow: ReturnType<typeof vi.fn>;
   };
+  let syncQueueSpy: {
+    enqueue: ReturnType<typeof vi.fn>;
+  };
+  let entriesSignal: ReturnType<typeof signal<{ category: string }[]>>;
   let notificationSpy: {
     showError: ReturnType<typeof vi.fn>;
     showInfo: ReturnType<typeof vi.fn>;
@@ -34,6 +44,8 @@ describe('CategoriesService', () => {
       getAll: vi.fn().mockResolvedValue([]),
       get: vi.fn().mockResolvedValue(undefined),
       set: vi.fn().mockResolvedValue(undefined),
+      put: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
       clear: vi.fn().mockResolvedValue(undefined),
     };
     sheetsSpy = {
@@ -43,7 +55,12 @@ describe('CategoriesService', () => {
       readCategoriesTabColumn: vi.fn().mockReturnValue(of([])),
       readActiveTabCategoryColumn: vi.fn().mockReturnValue(of([])),
       getActive2026TabName: vi.fn().mockReturnValue(null),
+      appendCategoryRow: vi.fn().mockReturnValue(of(undefined)),
     };
+    syncQueueSpy = {
+      enqueue: vi.fn().mockResolvedValue(undefined),
+    };
+    entriesSignal = signal([]);
     notificationSpy = {
       showError: vi.fn(),
       showInfo: vi.fn(),
@@ -56,6 +73,8 @@ describe('CategoriesService', () => {
         CategoriesService,
         { provide: IdbService, useValue: idbSpy },
         { provide: SheetsService, useValue: sheetsSpy },
+        { provide: SyncQueueService, useValue: syncQueueSpy },
+        { provide: EntriesService, useValue: { entries: entriesSignal.asReadonly() } },
         { provide: NotificationService, useValue: notificationSpy },
       ],
     });
@@ -465,6 +484,109 @@ describe('CategoriesService', () => {
       const order = service.categoryOrder();
       expect(order[0].id).toBe('transport'); // most recent last-used
       expect(order[1].id).toBe('health');
+    });
+  });
+
+  describe('create()', () => {
+    const existing: Category[] = [
+      { id: 'food', name: 'Food', color: '#6366f1', position: 0 },
+    ];
+
+    beforeEach(async () => {
+      idbSpy.getAll.mockResolvedValue(existing);
+      sheetsSpy.connectedSpreadsheetId.mockReturnValue(null);
+      await service.init();
+      vi.clearAllMocks();
+      sheetsSpy.appendCategoryRow.mockReturnValue(of(undefined));
+    });
+
+    it('happy path — IDB row written, signal updated, CSS var injected, sheets called once', async () => {
+      const cat = await service.create({ name: 'Groceries' });
+
+      expect(idbSpy.put).toHaveBeenCalledWith('categories', expect.objectContaining({ name: 'Groceries' }));
+      expect(service.categories().find(c => c.name === 'Groceries')).toBeTruthy();
+      expect(setPropertySpy).toHaveBeenCalledWith(`--color-${cat.id}`, cat.color);
+      expect(sheetsSpy.appendCategoryRow).toHaveBeenCalledOnce();
+    });
+
+    it('throws on empty name — no IDB write, no Sheets call', async () => {
+      await expect(service.create({ name: '' })).rejects.toMatchObject({ type: 'IDB_ERROR', message: 'Name is required' });
+      expect(idbSpy.put).not.toHaveBeenCalled();
+      expect(sheetsSpy.appendCategoryRow).not.toHaveBeenCalled();
+    });
+
+    it('throws on whitespace-only name', async () => {
+      await expect(service.create({ name: '   ' })).rejects.toMatchObject({ type: 'IDB_ERROR', message: 'Name is required' });
+    });
+
+    it('throws on case-insensitive duplicate name', async () => {
+      await expect(service.create({ name: 'food' })).rejects.toMatchObject({ type: 'CATEGORY_NAME_DUPLICATE', name: 'food' });
+      expect(idbSpy.put).not.toHaveBeenCalled();
+      expect(sheetsSpy.appendCategoryRow).not.toHaveBeenCalled();
+    });
+
+    it('on Sheets failure — IDB row persists, signal updated, syncQueue enqueued, notification shown', async () => {
+      sheetsSpy.appendCategoryRow.mockReturnValue(throwError(() => ({ type: 'SHEETS_API', status: 500, message: 'Server error' })));
+
+      const cat = await service.create({ name: 'Transport' });
+
+      expect(service.categories().find(c => c.name === 'Transport')).toBeTruthy();
+      expect(syncQueueSpy.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        operation: 'CATEGORY_INSERT',
+        categoryData: expect.objectContaining({ name: 'Transport' }),
+      }));
+      expect(notificationSpy.showError).toHaveBeenCalled();
+      expect(cat.name).toBe('Transport');
+    });
+
+    it('assigns position = max existing position + 1', async () => {
+      const cat = await service.create({ name: 'NewCat' });
+      expect(cat.position).toBe(1); // existing max is 0
+    });
+
+    it('picks next unused palette color', async () => {
+      const cat = await service.create({ name: 'NewCat' });
+      expect(cat.color).not.toBe('#6366f1'); // first palette color already used by 'Food'
+    });
+  });
+
+  describe('delete()', () => {
+    const cat: Category = { id: 'food', name: 'Food', color: '#6366f1', position: 0 };
+    let removePropertySpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(async () => {
+      idbSpy.getAll.mockResolvedValue([cat]);
+      sheetsSpy.connectedSpreadsheetId.mockReturnValue(null);
+      await service.init();
+      vi.clearAllMocks();
+      removePropertySpy = vi.spyOn(document.documentElement.style, 'removeProperty');
+    });
+
+    it('happy path — IDB delete called, signal filtered, CSS var removed, no Sheets call', async () => {
+      await service.delete(cat.id);
+
+      expect(idbSpy.delete).toHaveBeenCalledWith('categories', cat.id);
+      expect(service.categories().find(c => c.id === cat.id)).toBeUndefined();
+      expect(removePropertySpy).toHaveBeenCalledWith(`--color-${cat.id}`);
+      expect(sheetsSpy.appendCategoryRow).not.toHaveBeenCalled();
+    });
+
+    it('throws CATEGORY_IN_USE with exact entryCount when entries reference category name', async () => {
+      entriesSignal.set([{ category: 'Food' }, { category: 'Food' }, { category: 'Other' }] as never);
+
+      await expect(service.delete(cat.id)).rejects.toMatchObject({
+        type: 'CATEGORY_IN_USE',
+        categoryId: cat.id,
+        categoryName: 'Food',
+        entryCount: 2,
+      });
+      expect(idbSpy.delete).not.toHaveBeenCalled();
+      expect(removePropertySpy).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent for unknown id — silent no-op', async () => {
+      await expect(service.delete('unknown-id')).resolves.toBeUndefined();
+      expect(idbSpy.delete).not.toHaveBeenCalled();
     });
   });
 

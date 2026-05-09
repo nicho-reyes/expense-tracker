@@ -24,6 +24,7 @@ const MOCK_ENTRY: LocalEntry = {
 const ENQUEUE_INPUT = {
   operation: 'INSERT' as const,
   entryData: MOCK_ENTRY,
+  categoryData: null,
   targetEntryId: null,
   targetTabName: null,
 };

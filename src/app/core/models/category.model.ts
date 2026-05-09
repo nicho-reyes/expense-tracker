@@ -27,6 +27,14 @@ export const DEFAULT_CATEGORY_PALETTE: readonly string[] = [
   '#0ea5e9', // sky-500
 ] as const;
 
+export function pickNextPaletteColor(existing: Category[]): string {
+  const used = new Set(existing.map(c => c.color.toLowerCase()));
+  for (const c of DEFAULT_CATEGORY_PALETTE) {
+    if (!used.has(c.toLowerCase())) return c;
+  }
+  return DEFAULT_CATEGORY_PALETTE[existing.length % DEFAULT_CATEGORY_PALETTE.length];
+}
+
 export function slugifyCategoryId(name: string): string {
   return name
     .toLowerCase()

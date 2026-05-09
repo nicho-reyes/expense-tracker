@@ -1,3 +1,5 @@
+import { Category } from './category.model';
+
 export interface MonthlyTotal {
   month: string;       // YYYY-MM
   total: number;
@@ -35,8 +37,9 @@ export enum QueueState {
 
 export interface SyncQueueItem {
   id: string;
-  operation: 'INSERT' | 'UPDATE' | 'DELETE';
-  entryData: LocalEntry | null;       // null for DELETE
+  operation: 'INSERT' | 'UPDATE' | 'DELETE' | 'CATEGORY_INSERT';
+  entryData: LocalEntry | null;       // null for DELETE and CATEGORY_INSERT
+  categoryData: Category | null;  // set for CATEGORY_INSERT; null for entry operations
   targetEntryId: string | null;       // null for INSERT
   targetTabName: string | null;       // null for INSERT; set to originating tab for past-year UPDATE/DELETE retries
   enqueuedAt: number;                 // Date.now()

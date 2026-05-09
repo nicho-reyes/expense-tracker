@@ -1,0 +1,31 @@
+<h2 mat-dialog-title>Add category</h2>
+
+<mat-dialog-content>
+  <mat-form-field appearance="outline" class="w-full">
+    <mat-label>Category name</mat-label>
+    <input
+      matInput
+      [value]="nameInput()"
+      (input)="onNameChange($any($event.target).value)"
+      placeholder="e.g. Groceries"
+      autocomplete="off"
+      [attr.aria-describedby]="inlineError() ? 'add-cat-error' : null" />
+    @if (inlineError()) {
+      <mat-error id="add-cat-error">{{ inlineError() }}</mat-error>
+    } @else if (touched() && !nameInput().trim()) {
+      <mat-error>Name is required</mat-error>
+    }
+  </mat-form-field>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="onCancel()" type="button">Cancel</button>
+  <button
+    mat-flat-button
+    color="primary"
+    [disabled]="isSaveDisabled()"
+    (click)="onSave()"
+    type="button">
+    Save
+  </button>
+</mat-dialog-actions>

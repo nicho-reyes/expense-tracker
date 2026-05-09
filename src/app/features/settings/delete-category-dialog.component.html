@@ -1,0 +1,25 @@
+@if (state() === 'confirm') {
+  <h2 mat-dialog-title>Delete category</h2>
+  <mat-dialog-content>
+    <p>Delete "{{ category.name }}"? This cannot be undone.</p>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button (click)="onCancel()" type="button">Cancel</button>
+    <button
+      mat-button
+      class="text-error"
+      [disabled]="deleting()"
+      (click)="onDelete()"
+      type="button">
+      Delete
+    </button>
+  </mat-dialog-actions>
+} @else {
+  <h2 mat-dialog-title>Cannot delete</h2>
+  <mat-dialog-content>
+    <p>Cannot delete — {{ entryCount() }} {{ entryCount() === 1 ? 'entry uses' : 'entries use' }} this category.</p>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button (click)="onDismiss()" type="button">OK</button>
+  </mat-dialog-actions>
+}

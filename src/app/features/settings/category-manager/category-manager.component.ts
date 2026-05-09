@@ -7,6 +7,8 @@ import { MatDialog } from '@angular/material/dialog';
 import { CategoriesService } from '../../../core/services/categories.service';
 import { Category } from '../../../core/models/category.model';
 import { ColorPickerDialog, ColorPickerData } from '../color-picker.dialog';
+import { AddCategoryDialogComponent } from '../add-category-dialog.component';
+import { DeleteCategoryDialogComponent, DeleteCategoryDialogData } from '../delete-category-dialog.component';
 
 @Component({
   selector: 'app-category-manager',
@@ -51,5 +53,16 @@ export class CategoryManagerComponent {
 
   async onSyncCta(): Promise<void> {
     await this.categoriesService.refreshFromSheet();
+  }
+
+  onAddCategory(): void {
+    this.dialog.open<AddCategoryDialogComponent, void, boolean>(AddCategoryDialogComponent);
+  }
+
+  onDeleteCategory(category: Category): void {
+    this.dialog.open<DeleteCategoryDialogComponent, DeleteCategoryDialogData, boolean>(
+      DeleteCategoryDialogComponent,
+      { data: category },
+    );
   }
 }
