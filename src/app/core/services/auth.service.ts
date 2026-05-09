@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { Observable, EMPTY, from, map, catchError, finalize } from 'rxjs';
 import { NotificationService } from './notification.service';
 import { SyncQueueService } from './sync-queue.service';
+import { ConfigService } from './config.service';
 import { environment } from '../../../environments/environment';
 import type { GisClientConfigError, GisTokenClient, GisTokenResponse } from '../models/gis.types';
 
@@ -20,6 +21,7 @@ export class AuthService {
   private readonly notification = inject(NotificationService);
   private readonly router = inject(Router);
   private readonly syncQueue = inject(SyncQueueService);
+  private readonly config = inject(ConfigService);
 
   private readonly _user = signal<AuthUser | null>(null);
   private tokenClient: GisTokenClient | null = null;
@@ -38,7 +40,7 @@ export class AuthService {
 
   async init(): Promise<void> {
     try {
-      if (!environment.googleClientId) return;
+      if (!this.config.googleClientId) return;
 
       // AC3: skip GIS round-trip when we know the previous session already expired
       const storedExpiry = Number(sessionStorage.getItem(SESSION_EXPIRY_KEY));
@@ -56,7 +58,7 @@ export class AuthService {
   }
 
   async signIn(): Promise<void> {
-    if (!environment.googleClientId) {
+    if (!this.config.googleClientId) {
       throw new Error('Google Client ID is not configured.');
     }
     if (!this.tokenClient) {
@@ -182,7 +184,7 @@ export class AuthService {
       throw new Error('GIS OAuth2 API unavailable after script load');
     }
     this.tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: environment.googleClientId,
+      client_id: this.config.googleClientId,
       scope: SHEETS_SCOPE,
       callback: (response: GisTokenResponse) => this.handleTokenResponse(response),
       error_callback: (error: GisClientConfigError) => this.handleErrorCallback(error),

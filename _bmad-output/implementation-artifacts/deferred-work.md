@@ -10,6 +10,13 @@
 - `IdbService.get<T>` / `set<T>` constrained to `'appMeta'` store; all other store access via raw `getDb()` with no centralized `IDB_ERROR` mapping. Acceptable for scaffold; revisit if IDB errors prove hard to trace. [idb.service.ts:52]
 - `IdbService.get<T>` casts `unknown` to `T` with no runtime Zod validation — type safety is asserted not enforced for appMeta values. Low risk for single-user app; if corruption is observed, add per-key Zod schemas. [idb.service.ts:53]
 
+## Deferred from: code review of 1-4-first-run-setup-and-google-sheets-discovery (2026-05-08)
+
+- `ensureLoaded` not concurrency-safe — two simultaneous guard activations both see `_loadedFromIdb === false` and race to read IDB; gate with a cached `Promise<void>`. Unlikely in serial Angular router navigation; revisit if guard is called from non-router contexts. [sheets.service.ts:ensureLoaded]
+- `connectSheet` non-transactional IDB writes — two sequential `idb.set` calls; mid-flight crash leaves spreadsheetId persisted without schemaCache. Requires IdbService transaction support not yet implemented. [sheets.service.ts:connectSheet]
+- 401 from Sheets API maps to generic SHEETS_API, not AUTH_EXPIRED — token expiry during setup shows "Sheets error (401)". Belongs to Story 1.3 (token refresh). [sheets.service.ts:fetchSpreadsheetMeta]
+- `_loadedFromIdb` not reset if `idb.get` throws — every subsequent guard activation retries the failing IDB call with no error boundary or fallback state. IDB error handling strategy to be defined in a later story. [sheets.service.ts:ensureLoaded]
+
 ## Deferred from: code review of 1-2-google-oauth-authentication-flow (2026-05-08)
 
 - GIS `callback` and `error_callback` closures captured at `initTokenClient` time have no teardown path — a stale callback can fire after the service is re-initialised in tests or if the app ever hot-replaces the service. No Angular `DestroyRef` or `ngOnDestroy` hook exists on the service. Acceptable for a `providedIn: 'root'` singleton with a single lifetime; add a destroy guard if the service scope ever changes. [auth.service.ts:119-124]
@@ -19,7 +26,3 @@
 - FAB has no click handler — `<button mat-fab>` is visible and focusable but inert. Story 2.2 wires the tap handler to open `QuickAddSheetComponent`. [src/app/app.html:9-15]
 - BottomNav and FAB render on all routes including unauthenticated `/auth` — shell elements display unconditionally. Story 1.2 activates the auth guard to redirect to `/auth` and Story 1.2 can conditionally suppress shell chrome on that route. [src/app/app.html]
 - `App.isDark` signal declared but never bound in template — initialized in `ngOnInit` but `app.html` doesn't reference it; it's dead state. Intentional per spec pattern; remove or bind in a future story if theme-aware shell elements are added. [src/app/app.ts:19]
-
-## Deferred from: code review of 1-3-token-refresh-and-re-authentication-resilience (2026-05-08)
-
-- `attemptSilentRefresh` / `requestToken` sets `_pendingCallbacks` unconditionally with no guard for an existing value — a second concurrent caller silently orphans the first promise. Pre-existing from Story 1.2; the ID-4 patch (guarding `triggerProactiveRefresh` with `_isRefreshInProgress`) mitigates the primary trigger path. Revisit if additional call sites for `attemptSilentRefresh` are added. [auth.service.ts:requestToken]

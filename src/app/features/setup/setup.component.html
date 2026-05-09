@@ -1,0 +1,70 @@
+<div class="setup-container">
+  <div class="setup-card">
+
+    @if (step() === 'input') {
+      <h1 class="setup-title">Connect your Sheet</h1>
+      <p class="setup-subtitle">Paste a Google Sheets URL or spreadsheet ID to get started.</p>
+
+      <mat-form-field appearance="outline" class="setup-field">
+        <mat-label>Google Sheets URL or ID</mat-label>
+        <input
+          matInput
+          [ngModel]="inputValue()"
+          (ngModelChange)="inputValue.set($event)"
+          placeholder="https://docs.google.com/spreadsheets/d/…"
+          autocomplete="off"
+        />
+        <mat-hint>Paste the full URL or just the spreadsheet ID</mat-hint>
+      </mat-form-field>
+
+      @if (errorMessage()) {
+        <div class="error-message" role="alert">
+          <p>{{ errorMessage() }}</p>
+        </div>
+      }
+
+      <button mat-raised-button color="primary" class="action-btn" (click)="onValidate()">
+        Connect
+      </button>
+    }
+
+    @if (step() === 'validating') {
+      <mat-spinner diameter="48"></mat-spinner>
+      <p class="setup-subtitle">Checking your Sheet…</p>
+    }
+
+    @if (step() === 'confirm') {
+      <h1 class="setup-title">Sheet Found</h1>
+      <p class="setup-subtitle">We found your spreadsheet. Confirm to connect it.</p>
+
+      <div class="sheet-name-display">
+        <span class="sheet-name">{{ spreadsheetTitle() }}</span>
+      </div>
+
+      @if (warnMessage()) {
+        <div class="warn-message" role="status">
+          <p>{{ warnMessage() }}</p>
+        </div>
+      }
+
+      @if (errorMessage()) {
+        <div class="error-message" role="alert">
+          <p>{{ errorMessage() }}</p>
+        </div>
+      }
+
+      <div class="confirm-actions">
+        <button mat-stroked-button (click)="onBack()" [disabled]="isLoading()">Back</button>
+        <button mat-raised-button color="primary" (click)="onConnect()" [disabled]="isLoading()">
+          @if (isLoading()) {
+            <mat-spinner diameter="20" class="btn-spinner"></mat-spinner>
+            <span>Connecting…</span>
+          } @else {
+            <span>Confirm &amp; Connect</span>
+          }
+        </button>
+      </div>
+    }
+
+  </div>
+</div>

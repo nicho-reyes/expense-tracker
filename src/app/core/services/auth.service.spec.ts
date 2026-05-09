@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { AuthService } from './auth.service';
 import { NotificationService } from './notification.service';
 import { SyncQueueService } from './sync-queue.service';
+import { ConfigService } from './config.service';
 
 // Mock GIS window.google
 function setupGisMock(options: {
@@ -65,6 +66,7 @@ describe('AuthService', () => {
   let routerSpy: { navigate: ReturnType<typeof vi.fn> };
   let notificationSpy: { showError: ReturnType<typeof vi.fn>; showSuccess: ReturnType<typeof vi.fn>; showInfo: ReturnType<typeof vi.fn> };
   let syncQueueSpy: { retryAll: ReturnType<typeof vi.fn> };
+  let configStub: { googleClientId: string };
 
   beforeEach(() => {
     routerSpy = { navigate: vi.fn().mockResolvedValue(true) };
@@ -74,9 +76,7 @@ describe('AuthService', () => {
       showInfo: vi.fn(),
     };
     syncQueueSpy = { retryAll: vi.fn().mockResolvedValue(undefined) };
-
-    // Stub environment with a googleClientId
-    vi.stubGlobal('environment', undefined);
+    configStub = { googleClientId: 'test-client-id.apps.googleusercontent.com' };
 
     TestBed.configureTestingModule({
       providers: [
@@ -84,6 +84,7 @@ describe('AuthService', () => {
         { provide: Router, useValue: routerSpy },
         { provide: NotificationService, useValue: notificationSpy },
         { provide: SyncQueueService, useValue: syncQueueSpy },
+        { provide: ConfigService, useValue: configStub },
       ],
     });
     service = TestBed.inject(AuthService);
@@ -111,7 +112,7 @@ describe('AuthService', () => {
 
   describe('init()', () => {
     it('resolves (does not reject) when googleClientId is empty', async () => {
-      // environment.googleClientId is '' by default from environment.ts stub
+      configStub.googleClientId = '';
       await expect(service.init()).resolves.toBeUndefined();
     });
 
@@ -125,10 +126,9 @@ describe('AuthService', () => {
       setupGisMock({ silentFails: true });
       const loadSpy = vi.spyOn(service as any, 'loadGisScript').mockResolvedValue(undefined);
 
-      // Use fake timers to advance past the 10s timeout
       vi.useFakeTimers();
       const initPromise = service.init();
-      vi.advanceTimersByTime(11_000);
+      await vi.advanceTimersByTimeAsync(11_000);
       await expect(initPromise).resolves.toBeUndefined();
       vi.useRealTimers();
       loadSpy.mockRestore();

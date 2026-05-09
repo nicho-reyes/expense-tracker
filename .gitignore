@@ -39,6 +39,10 @@ testem.log
 /typings
 __screenshots__/
 
+# Runtime config (generated from .env by scripts/set-config.js)
+.env
+/public/config.json
+
 # System files
 .DS_Store
 Thumbs.db

@@ -12,6 +12,7 @@ import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { AuthService } from './core/services/auth.service';
+import { ConfigService } from './core/services/config.service';
 import { provideServiceWorker } from '@angular/service-worker';
 
 export const appConfig: ApplicationConfig = {
@@ -27,8 +28,9 @@ export const appConfig: ApplicationConfig = {
     }),
     {
       provide: APP_INITIALIZER,
-      useFactory: (authService: AuthService) => () => authService.init(),
-      deps: [AuthService],
+      useFactory: (config: ConfigService, auth: AuthService) =>
+        () => config.load().then(() => auth.init()),
+      deps: [ConfigService, AuthService],
       multi: true,
     },
     // CategoriesService.init() APP_INITIALIZER added in Story 1.5
