@@ -1,1 +1,27 @@
-<div>Entries List — implemented in Story 2.3</div>
+<div
+  class="overflow-y-auto h-[calc(100dvh-var(--app-header-height,0px))] pb-[calc(env(safe-area-inset-bottom)+4rem)]"
+  style="touch-action: pan-y;">
+  @if (entries().length === 0) {
+    <app-empty-state
+      icon="receipt_long"
+      title="No expenses yet"
+      message="Tap + to log your first expense."
+      ctaLabel="Add expense"
+      (ctaClick)="onAddCta()" />
+  } @else {
+    @for (group of groupedEntries(); track group.month; let last = $last) {
+      <h2 class="px-4 py-2 text-sm font-medium text-zinc-500 sticky top-0 bg-white dark:bg-zinc-900">
+        {{ group.month }}
+      </h2>
+      @for (entry of group.entries; track entry.id) {
+        <app-entry-row
+          [entry]="entry"
+          [category]="categoryById().get(entry.category) ?? null"
+          (tap)="onEntryTap($event)" />
+      }
+      @if (!last) {
+        <mat-divider />
+      }
+    }
+  }
+</div>
