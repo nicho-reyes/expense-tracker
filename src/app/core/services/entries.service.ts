@@ -14,6 +14,9 @@ export class EntriesService {
   private readonly _entries = signal<LocalEntry[]>([]);
   readonly entries = this._entries.asReadonly();
 
+  private readonly _initialized = signal(false);
+  readonly isInitialized = this._initialized.asReadonly();
+
   readonly selectedMonth = signal<string>('');
   readonly syncStatus = signal<'idle' | 'syncing' | 'error'>('idle');
 
@@ -29,6 +32,8 @@ export class EntriesService {
         const appErr = this.toIdbError(err);
         this.notification.showError(appErr);
         // Do not rethrow — boot must continue with empty list
+      } finally {
+        this._initialized.set(true);
       }
     })();
     return this.initPromise;

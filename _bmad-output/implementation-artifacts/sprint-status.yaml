@@ -75,7 +75,7 @@ development_status:
 
   # Epic 4: Dashboard & Spending Insights
   epic-4: backlog
-  4-1-dashboardcomponent-with-monthly-total-and-month-navigation: backlog
+  4-1-dashboardcomponent-with-monthly-total-and-month-navigation: done
   4-2-sparklinechartcomponent-and-kpirowcomponent: backlog
   4-3-categorybreakdownbarcomponent: backlog
   4-4-category-month-drill-down-with-drilldownheader: backlog

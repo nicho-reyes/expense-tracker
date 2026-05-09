@@ -34,6 +34,14 @@
 - E2E `page.reload()` is an imperfect proxy for true tab close+reopen (AC8) — `page.close()` + `context.newPage()` + `page.goto('/')` would exercise full OS-level IDB durability. [e2e/entry-persistence.spec.ts]
 - Module-level `fakeDb` mutable state in `idb.service.spec.ts` — concurrent runner risk under `--pool=threads`; tests should obtain db reference via `service.getDb()` rather than module-level variable if parallel runner is adopted. [idb.service.spec.ts]
 
+## Deferred from: code review of 4-1-dashboardcomponent-with-monthly-total-and-month-navigation (2026-05-09)
+
+- FAB button has no click handler — dead affordance; by design, Story 2.2 owns click wiring to MatBottomSheet. [dashboard.component.html]
+- `isLoading` set to false after IDB init failure — dashboard shows CHF 0.00 instead of error state; by design per spec ("boot must continue with empty list"), notification service shows error separately. [entries.service.ts, dashboard.component.ts]
+- `addMonths` with empty/invalid string produces NaN-NaN silently — not exposed via type-safe navigation UI; low risk for MVP. [month.util.ts]
+- `canGoNext` doesn't re-evaluate when local clock crosses midnight without user interaction — minor UX edge case. [dashboard.component.ts]
+- `initPromise` single-flight has no reset mechanism — pre-existing design from Story 2.1; relevant if offline resilience with retry is needed. [entries.service.ts]
+
 ## Deferred from: code review of 1-2-google-oauth-authentication-flow (2026-05-08)
 
 - GIS `callback` and `error_callback` closures captured at `initTokenClient` time have no teardown path — a stale callback can fire after the service is re-initialised in tests or if the app ever hot-replaces the service. No Angular `DestroyRef` or `ngOnDestroy` hook exists on the service. Acceptable for a `providedIn: 'root'` singleton with a single lifetime; add a destroy guard if the service scope ever changes. [auth.service.ts:119-124]

@@ -1,0 +1,15 @@
+<section
+  class="rounded-2xl bg-white dark:bg-zinc-900 shadow p-6 flex flex-col gap-2"
+  [attr.aria-busy]="isLoading() ? 'true' : null"
+  [attr.aria-label]="'Spending total for ' + displayMonth()">
+  <span class="text-sm text-zinc-500">{{ displayMonth() }}</span>
+
+  @if (isLoading()) {
+    <div
+      class="bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse w-32"
+      style="height: 40px;"
+      aria-hidden="true"></div>
+  } @else {
+    <h2 class="text-4xl font-bold">{{ displayTotal() }}</h2>
+  }
+</section>

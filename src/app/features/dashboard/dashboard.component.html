@@ -1,5 +1,29 @@
-<div class="p-4">
-  <h1 class="text-2xl font-semibold">Dashboard</h1>
+<div class="flex flex-col gap-4 p-4">
+  <div class="flex items-center justify-center gap-2">
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Previous month"
+      (click)="onPrevMonth()">
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <span class="text-base font-medium" aria-live="polite">{{ formatMonthLabel(selectedMonth()) }}</span>
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Next month"
+      [disabled]="!canGoNext()"
+      (click)="onNextMonth()">
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+
+  <app-hero-card
+    [total]="monthTotal()"
+    [month]="selectedMonth()"
+    [isLoading]="isLoading()" />
+
+  <!-- Sparkline + KPI row + breakdown bar added in Stories 4.2, 4.3 -->
 </div>
 
 <button
