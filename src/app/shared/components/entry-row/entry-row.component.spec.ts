@@ -97,20 +97,21 @@ describe('EntryRowComponent', () => {
     expect(icon).toBeNull();
   });
 
-  it('clicking the row emits tap with the entry (AC6)', () => {
+  it('clicking the row emits tap with entry and rowElement (AC6)', () => {
     const entry: LocalEntry = { ...BASE_ENTRY };
     fixture.componentRef.setInput('entry', entry);
     fixture.componentRef.setInput('category', CAT);
     fixture.detectChanges();
 
-    const emitted: LocalEntry[] = [];
+    const emitted: { entry: LocalEntry; rowElement: HTMLElement }[] = [];
     component.tap.subscribe(e => emitted.push(e));
 
     const btn = fixture.debugElement.query(By.css('button'));
     btn.nativeElement.click();
 
     expect(emitted).toHaveLength(1);
-    expect(emitted[0].id).toBe(entry.id);
+    expect(emitted[0].entry.id).toBe(entry.id);
+    expect(emitted[0].rowElement).toBe(btn.nativeElement);
   });
 
   it('row button has touch-action: manipulation (AC6)', () => {

@@ -1,0 +1,86 @@
+@if (entry()) {
+  <div class="flex-1 min-h-0 flex flex-col gap-3 p-4 overflow-y-auto">
+
+    @if (isReadOnly()) {
+      <p class="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 rounded px-3 py-2" role="status">
+        Read-only — this entry lives in a legacy tab
+      </p>
+    }
+
+    <mat-form-field appearance="outline">
+      <mat-label>Date</mat-label>
+      <input
+        matInput
+        type="date"
+        [disabled]="isReadOnly()"
+        [ngModel]="dateValue()"
+        (ngModelChange)="dateValue.set($event)" />
+    </mat-form-field>
+
+    <div class="flex gap-2 overflow-x-auto py-2"
+         [class.pointer-events-none]="isReadOnly()"
+         [class.opacity-50]="isReadOnly()"
+         role="group"
+         aria-label="Category">
+      @for (cat of categoryTiles(); track cat.id) {
+        <app-category-tile
+          [category]="cat"
+          [selected]="selectedCategoryId() === cat.id"
+          (tap)="onSelectCategory($event)" />
+      } @empty {
+        <span class="text-sm text-zinc-500 self-center py-4">No categories yet.</span>
+      }
+    </div>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Amount (CHF)</mat-label>
+      <input
+        matInput
+        type="number"
+        inputmode="decimal"
+        step="0.01"
+        [disabled]="isReadOnly()"
+        [ngModel]="amountValue()"
+        (ngModelChange)="amountValue.set($event === null || $event === undefined || $event === '' ? null : +$event)" />
+    </mat-form-field>
+    @if (amountValue() === 0) {
+      <p class="text-xs text-red-600 -mt-2 px-1" role="alert">Amount cannot be zero.</p>
+    }
+
+    <mat-form-field appearance="outline">
+      <mat-label>Remarks (optional)</mat-label>
+      <input
+        matInput
+        type="text"
+        [disabled]="isReadOnly()"
+        [ngModel]="remarksValue()"
+        (ngModelChange)="remarksValue.set($event)" />
+    </mat-form-field>
+  </div>
+
+  <div class="flex gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white dark:bg-zinc-900 border-t">
+    <button mat-button type="button" (click)="onCancel()">Cancel</button>
+    @if (!isReadOnly()) {
+      <button
+        mat-button
+        type="button"
+        class="text-destructive"
+        data-testid="delete-btn"
+        (click)="onDelete()">
+        Delete
+      </button>
+      <button
+        mat-flat-button
+        color="primary"
+        type="button"
+        class="flex-1"
+        data-testid="save-btn"
+        [disabled]="!canSave() || isSaving()"
+        (click)="onSave()">
+        Save
+      </button>
+    }
+  </div>
+} @else {
+  <div class="p-4 text-zinc-500">Entry not found.</div>
+}

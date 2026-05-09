@@ -1,14 +1,17 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   inject,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { MatBottomSheet } from '@angular/material/bottom-sheet';
 import { MatDividerModule } from '@angular/material/divider';
 import { EntriesService } from '../../core/services/entries.service';
 import { CategoriesService } from '../../core/services/categories.service';
+import { EntryDetailSheetComponent } from '../entry-form/entry-detail-sheet.component';
 import { EntryRowComponent } from '../../shared/components/entry-row/entry-row.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
 import { LocalEntry } from '../../core/models/entry.model';
@@ -27,6 +30,7 @@ export class EntriesListComponent {
   private readonly categoriesSvc = inject(CategoriesService);
   private readonly router = inject(Router);
   private readonly bottomSheet = inject(MatBottomSheet);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly entries = computed<LocalEntry[]>(() =>
     [...this.entriesSvc.entries()].sort((a, b) => {
@@ -50,8 +54,13 @@ export class EntriesListComponent {
     return map;
   });
 
-  onEntryTap(entry: LocalEntry): void {
-    // Story 2.4 will open the edit sheet here. For now, no-op.
+  onEntryTap(event: { entry: LocalEntry; rowElement: HTMLElement }): void {
+    const ref = this.bottomSheet.open(EntryDetailSheetComponent, {
+      data: { entryId: event.entry.id, returnFocusTo: event.rowElement },
+    });
+    ref.afterDismissed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      requestAnimationFrame(() => event.rowElement.focus());
+    });
   }
 
   onAddCta(): void {

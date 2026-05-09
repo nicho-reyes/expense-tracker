@@ -3,6 +3,7 @@ import { EntriesService } from './entries.service';
 import { IdbService } from './idb.service';
 import { NotificationService } from './notification.service';
 import { SheetsService } from './sheets.service';
+import { SyncQueueService } from './sync-queue.service';
 import { LocalEntry, NewEntryInput } from '../models/entry.model';
 import { AppError } from '../models/error.model';
 
@@ -18,6 +19,21 @@ const ENTRY_A: LocalEntry = {
   schemaVersion: '2026',
   sheetRowIndex: null,
   syncStatus: 'pending',
+  isReadOnly: false,
+};
+
+const ENTRY_SYNCED: LocalEntry = {
+  id: 'uuid-synced',
+  date: '2026-05-08',
+  month: '2026-05',
+  year: 2026,
+  category: 'Transport',
+  amount: 5.0,
+  remarks: 'Tram',
+  tabName: '2026',
+  schemaVersion: '2026',
+  sheetRowIndex: 3,
+  syncStatus: 'synced',
   isReadOnly: false,
 };
 
@@ -54,6 +70,11 @@ describe('EntriesService', () => {
   };
   let notificationSpy: { showError: ReturnType<typeof vi.fn> };
   let sheetsSpy: { getActive2026TabName: ReturnType<typeof vi.fn> };
+  let syncQueueSpy: {
+    enqueue: ReturnType<typeof vi.fn>;
+    replaceEntryData: ReturnType<typeof vi.fn>;
+    dequeue: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     idbSpy = {
@@ -67,6 +88,11 @@ describe('EntriesService', () => {
     sheetsSpy = {
       getActive2026TabName: vi.fn().mockReturnValue('2026'),
     };
+    syncQueueSpy = {
+      enqueue: vi.fn().mockResolvedValue(undefined),
+      replaceEntryData: vi.fn().mockResolvedValue(true),
+      dequeue: vi.fn().mockResolvedValue(undefined),
+    };
 
     TestBed.configureTestingModule({
       providers: [
@@ -74,6 +100,7 @@ describe('EntriesService', () => {
         { provide: IdbService, useValue: idbSpy },
         { provide: NotificationService, useValue: notificationSpy },
         { provide: SheetsService, useValue: sheetsSpy },
+        { provide: SyncQueueService, useValue: syncQueueSpy },
       ],
     });
     service = TestBed.inject(EntriesService);
@@ -222,6 +249,45 @@ describe('EntriesService', () => {
         expect.objectContaining({ type: 'IDB_ERROR' }),
       );
     });
+
+    it('calls syncQueue.replaceEntryData when entry syncStatus is "pending"', async () => {
+      await service.update(ENTRY_A.id, { amount: 20 }); // ENTRY_A is pending
+
+      expect(syncQueueSpy.replaceEntryData).toHaveBeenCalledWith(
+        ENTRY_A.id,
+        expect.objectContaining({ id: ENTRY_A.id, amount: 20 }),
+      );
+      expect(syncQueueSpy.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('calls syncQueue.enqueue UPDATE when entry syncStatus is "synced"', async () => {
+      idbSpy.getAll.mockResolvedValue([ENTRY_SYNCED]);
+      service = TestBed.inject(EntriesService);
+      // Reinitialize with synced entry
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          EntriesService,
+          { provide: IdbService, useValue: { ...idbSpy, getAll: vi.fn().mockResolvedValue([ENTRY_SYNCED]) } },
+          { provide: NotificationService, useValue: notificationSpy },
+          { provide: SheetsService, useValue: sheetsSpy },
+          { provide: SyncQueueService, useValue: syncQueueSpy },
+        ],
+      });
+      const svc = TestBed.inject(EntriesService);
+      await svc.init();
+
+      await svc.update(ENTRY_SYNCED.id, { amount: 10 });
+
+      expect(syncQueueSpy.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'UPDATE',
+          targetEntryId: ENTRY_SYNCED.id,
+          targetTabName: ENTRY_SYNCED.tabName,
+        }),
+      );
+      expect(syncQueueSpy.replaceEntryData).not.toHaveBeenCalled();
+    });
   });
 
   // ── delete() ─────────────────────────────────────────────────────────────
@@ -239,7 +305,13 @@ describe('EntriesService', () => {
       expect(service.entries().find(e => e.id === ENTRY_A.id)).toBeUndefined();
     });
 
-    it('is idempotent on missing id — no throw, IdbService.delete not called', async () => {
+    it('returns the snapshot of the deleted entry', async () => {
+      const snapshot = await service.delete(ENTRY_A.id);
+
+      expect(snapshot).toEqual(ENTRY_A);
+    });
+
+    it('is idempotent on missing id — returns undefined, IdbService.delete not called', async () => {
       await expect(service.delete('nonexistent')).resolves.toBeUndefined();
 
       expect(idbSpy.delete).not.toHaveBeenCalled();
@@ -255,6 +327,13 @@ describe('EntriesService', () => {
       expect(service.entries()[0]).toEqual(ENTRY_A);
       expect(service.entries()[1]).toEqual(ENTRY_B);
       expect(notificationSpy.showError).toHaveBeenCalled();
+    });
+
+    it('does NOT enqueue anything on delete (caller decides via finalizeDelete)', async () => {
+      await service.delete(ENTRY_A.id);
+
+      expect(syncQueueSpy.enqueue).not.toHaveBeenCalled();
+      expect(syncQueueSpy.dequeue).not.toHaveBeenCalled();
     });
   });
 
@@ -275,6 +354,66 @@ describe('EntriesService', () => {
 
     it('returns undefined for unknown id', () => {
       expect(service.getById('nope')).toBeUndefined();
+    });
+  });
+
+  // ── restore() ────────────────────────────────────────────────────────────
+
+  describe('restore()', () => {
+    beforeEach(async () => {
+      idbSpy.getAll.mockResolvedValue([ENTRY_B]);
+      await service.init();
+    });
+
+    it('re-inserts snapshot into IDB and signal, sorted by date descending', async () => {
+      // ENTRY_A date 2026-05-09 < ENTRY_B date 2026-05-10 → ENTRY_B first
+      await service.restore(ENTRY_A);
+
+      expect(idbSpy.put).toHaveBeenCalledWith('entries', ENTRY_A);
+      expect(service.entries()).toHaveLength(2);
+      expect(service.entries()[0].id).toBe(ENTRY_B.id); // 2026-05-10 comes first
+      expect(service.entries()[1].id).toBe(ENTRY_A.id);
+    });
+
+    it('rolls back and throws on IDB rejection', async () => {
+      const idbError: AppError = { type: 'IDB_ERROR', message: 'write failed' };
+      idbSpy.put.mockRejectedValue(idbError);
+
+      await expect(service.restore(ENTRY_A)).rejects.toMatchObject({ type: 'IDB_ERROR' });
+    });
+  });
+
+  // ── finalizeDelete() ─────────────────────────────────────────────────────
+
+  describe('finalizeDelete()', () => {
+    it('enqueues DELETE when syncStatus is "synced"', async () => {
+      await service.finalizeDelete(ENTRY_SYNCED);
+
+      expect(syncQueueSpy.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'DELETE',
+          entryData: null,
+          targetEntryId: ENTRY_SYNCED.id,
+          targetTabName: ENTRY_SYNCED.tabName,
+        }),
+      );
+      expect(syncQueueSpy.dequeue).not.toHaveBeenCalled();
+    });
+
+    it('calls dequeue when syncStatus is "pending" (never reached Sheets)', async () => {
+      await service.finalizeDelete(ENTRY_A); // ENTRY_A is pending
+
+      expect(syncQueueSpy.dequeue).toHaveBeenCalledWith(ENTRY_A.id);
+      expect(syncQueueSpy.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('calls dequeue when syncStatus is "error"', async () => {
+      const errorEntry: LocalEntry = { ...ENTRY_A, syncStatus: 'error' };
+
+      await service.finalizeDelete(errorEntry);
+
+      expect(syncQueueSpy.dequeue).toHaveBeenCalledWith(errorEntry.id);
+      expect(syncQueueSpy.enqueue).not.toHaveBeenCalled();
     });
   });
 });

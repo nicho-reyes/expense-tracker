@@ -319,4 +319,42 @@ describe('SyncQueueService', () => {
       expect(idbSpy.getAll).toHaveBeenCalledWith('syncQueue');
     });
   });
+
+  describe('replaceEntryData()', () => {
+    it('updates matching PENDING INSERT row entryData and returns true', async () => {
+      sheetsSpy.connectedSpreadsheetId.mockReturnValue(null); // prevent auto-processing
+      await service.enqueue(ENQUEUE_INPUT);
+      const entryId = MOCK_ENTRY.id; // INSERT uses entry id as queue id
+      const updatedEntry: LocalEntry = { ...MOCK_ENTRY, amount: 99.9 };
+
+      const result = await service.replaceEntryData(entryId, updatedEntry);
+
+      expect(result).toBe(true);
+      expect(idbSpy.put).toHaveBeenLastCalledWith(
+        'syncQueue',
+        expect.objectContaining({ entryData: updatedEntry }),
+      );
+      const item = service.queueItems()[0];
+      expect(item.entryData?.amount).toBe(99.9);
+    });
+
+    it('returns false when no matching INSERT row exists (e.g. synced entry)', async () => {
+      const result = await service.replaceEntryData('nonexistent-entry-id', MOCK_ENTRY);
+
+      expect(result).toBe(false);
+      expect(idbSpy.put).not.toHaveBeenCalled();
+    });
+
+    it('dequeue cancels a never-synced INSERT', async () => {
+      sheetsSpy.connectedSpreadsheetId.mockReturnValue(null);
+      await service.enqueue(ENQUEUE_INPUT);
+      const entryId = MOCK_ENTRY.id;
+      expect(service.queueItems()).toHaveLength(1);
+
+      await service.dequeue(entryId);
+
+      expect(service.queueItems()).toHaveLength(0);
+      expect(idbSpy.delete).toHaveBeenCalledWith('syncQueue', entryId);
+    });
+  });
 });

@@ -60,6 +60,14 @@
 - UUID vs slug ID inconsistency — categories created via `create()` use `crypto.randomUUID()` for id; `seedFromSheet` uses `slugifyCategoryId(name)` as id; delete+recreate with same name produces a duplicate after next seed import. Pre-existing architectural decision. [categories.service.ts:202]
 - EntriesService signal may return empty `[]` if `delete()` is called before `EntriesService.init()` resolves (boot order: CategoriesService.init → EntriesService.init) — silently allows deletion of referenced categories. Theoretical, normal navigation requires user interaction after boot. [categories.service.ts:233]
 
+## Deferred from: code review of 2-4-edit-and-delete-entry-with-confirmation-and-undo (2026-05-09)
+
+- `handleUnauthorized()` in AuthService signs out on every 401 with no token-refresh retry — pre-existing stub added to fix auth interceptor compilation errors; proper retry belongs in Story 1.3. [auth.service.ts:76]
+- No sync queue pause during 5-second undo window — a fast Sheets flush during the undo window could process a DELETE before finalization, or an INSERT before the user undoes; Story 3.1 sync processor should block flushes during active undo windows. [notification.service.ts, sync-queue.service.ts]
+- `finalizeDelete()` uses stale `snapshot.syncStatus` — if the background processor marks the entry synced during the 5s window, finalizeDelete routes to `dequeue()` instead of `enqueue(DELETE)`, silently dropping the Sheets delete. Story 3.1 should re-read current syncStatus from the signal at finalization time. [entries.service.ts:149]
+- `update()` does not update entry `syncStatus` to `'pending'` after enqueuing an UPDATE — the `isPending` indicator on EntryRowComponent stays false while the edit awaits sync; Story 3.1 should set syncStatus in both IDB and signal after enqueuing. [entries.service.ts:101]
+- `.text-destructive { color: var(--destructive) !important; }` uses `!important` globally — intentional Material override; revisit if any component needs to locally suppress the destructive color. [styles.scss:52]
+
 ## Deferred from: code review of 1-2-google-oauth-authentication-flow (2026-05-08)
 
 - GIS `callback` and `error_callback` closures captured at `initTokenClient` time have no teardown path — a stale callback can fire after the service is re-initialised in tests or if the app ever hot-replaces the service. No Angular `DestroyRef` or `ngOnDestroy` hook exists on the service. Acceptable for a `providedIn: 'root'` singleton with a single lifetime; add a destroy guard if the service scope ever changes. [auth.service.ts:119-124]

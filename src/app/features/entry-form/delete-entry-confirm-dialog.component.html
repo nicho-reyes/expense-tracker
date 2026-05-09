@@ -1,0 +1,8 @@
+<h2 mat-dialog-title>Delete this entry?</h2>
+<mat-dialog-content>
+  <p class="text-sm text-zinc-600 dark:text-zinc-400">{{ summary }}</p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" [mat-dialog-close]="false">Cancel</button>
+  <button mat-button type="button" class="text-destructive" [mat-dialog-close]="true">Delete</button>
+</mat-dialog-actions>

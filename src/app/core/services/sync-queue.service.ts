@@ -3,7 +3,7 @@ import { firstValueFrom } from 'rxjs';
 import { IdbService } from './idb.service';
 import { SheetsService } from './sheets.service';
 import { NotificationService } from './notification.service';
-import { SyncQueueItem, QueueState } from '../models/entry.model';
+import { LocalEntry, SyncQueueItem, QueueState } from '../models/entry.model';
 import { AppError } from '../models/error.model';
 
 export interface ISyncQueueService {
@@ -13,6 +13,7 @@ export interface ISyncQueueService {
 
   init(): Promise<void>;
   enqueue(item: Omit<SyncQueueItem, 'id' | 'enqueuedAt' | 'status' | 'retryCount' | 'lastAttemptAt' | 'nextRetryAt' | 'errorMessage'>): Promise<void>;
+  replaceEntryData(targetEntryId: string, newEntryData: LocalEntry): Promise<boolean>;
   dequeue(id: string): Promise<void>;
   markError(id: string, message: string): Promise<void>;
   markSynced(id: string): Promise<void>;
@@ -43,9 +44,11 @@ export class SyncQueueService implements ISyncQueueService {
   }
 
   async enqueue(item: Omit<SyncQueueItem, 'id' | 'enqueuedAt' | 'status' | 'retryCount' | 'lastAttemptAt' | 'nextRetryAt' | 'errorMessage'>): Promise<void> {
+    // INSERT items use the entry id as the queue id for idempotency (dequeue/replaceEntryData look up by this id)
+    const id = item.operation === 'INSERT' && item.entryData ? item.entryData.id : crypto.randomUUID();
     const queueItem: SyncQueueItem = {
       ...item,
-      id: crypto.randomUUID(),
+      id,
       enqueuedAt: Date.now(),
       status: QueueState.PENDING,
       retryCount: 0,
@@ -78,6 +81,25 @@ export class SyncQueueService implements ISyncQueueService {
 
   async dequeue(id: string): Promise<void> {
     return this.markSynced(id);
+  }
+
+  async replaceEntryData(targetEntryId: string, newEntryData: LocalEntry): Promise<boolean> {
+    const item = this.queueItems().find(
+      i => (i.status === QueueState.PENDING || i.status === QueueState.SYNC_ERROR) &&
+           i.operation === 'INSERT' &&
+           i.entryData?.id === targetEntryId,
+    );
+    if (!item) return false;
+    const updated: SyncQueueItem = { ...item, entryData: newEntryData };
+    try {
+      await this.idb.put('syncQueue', updated);
+    } catch (err) {
+      const appErr = this.toAppError(err);
+      this.notification.showError(appErr);
+      throw appErr;
+    }
+    this.queueItems.update(all => all.map(i => i.id === item.id ? updated : i));
+    return true;
   }
 
   async markError(id: string, message: string): Promise<void> {

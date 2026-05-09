@@ -19,7 +19,7 @@ const CHF_FORMATTER = new Intl.NumberFormat('de-CH', {
 export class EntryRowComponent {
   readonly entry = input.required<LocalEntry>();
   readonly category = input<Category | null>(null);
-  readonly tap = output<LocalEntry>();
+  readonly tap = output<{ entry: LocalEntry; rowElement: HTMLElement }>();
 
   readonly displayAmount = computed(() => {
     const amt = this.entry().amount;
@@ -34,7 +34,7 @@ export class EntryRowComponent {
   readonly isPending = computed(() => this.entry().syncStatus === 'pending');
   readonly isErrored = computed(() => this.entry().syncStatus === 'error');
 
-  onClick(): void {
-    this.tap.emit(this.entry());
+  onClick(event: MouseEvent): void {
+    this.tap.emit({ entry: this.entry(), rowElement: event.currentTarget as HTMLElement });
   }
 }

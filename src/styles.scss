@@ -37,6 +37,7 @@ body {
   --border: #e4e4e7;      /* zinc-200 */
   --muted: #71717a;       /* zinc-500 */
   --accent: #4f46e5;      /* indigo-600 */
+  --destructive: #ef4444; /* red-500 — destructive action ghost buttons */
 }
 
 .dark {
@@ -46,6 +47,11 @@ body {
   --border: #27272a;      /* zinc-800 */
   --muted: #a1a1aa;       /* zinc-400 */
   --accent: #818cf8;      /* indigo-400 */
+}
+
+// Semantic utility — used by ghost destructive buttons (e.g. delete confirmation dialog)
+.text-destructive {
+  color: var(--destructive) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
 import { Observable, EMPTY, from, map, catchError, finalize } from 'rxjs';
+import { Router } from '@angular/router';
 import { NotificationService } from './notification.service';
 import { SyncQueueService } from './sync-queue.service';
 import { ConfigService } from './config.service';

@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { IdbService } from './idb.service';
 import { NotificationService } from './notification.service';
 import { SheetsService } from './sheets.service';
+import { SyncQueueService } from './sync-queue.service';
 import { LocalEntry, MonthlyTotal, NewEntryInput } from '../models/entry.model';
 import { AppError } from '../models/error.model';
 import { listLast12Months } from '../../shared/utils/month.util';
@@ -11,6 +12,7 @@ export class EntriesService {
   private readonly idb = inject(IdbService);
   private readonly notification = inject(NotificationService);
   private readonly sheets = inject(SheetsService);
+  private readonly syncQueue = inject(SyncQueueService);
 
   private readonly _entries = signal<LocalEntry[]>([]);
   readonly entries = this._entries.asReadonly();
@@ -91,7 +93,8 @@ export class EntriesService {
       this.notification.showError(appErr);
       throw appErr;
     }
-    const updated: LocalEntry = { ...prev[idx], ...patch, id };
+    const existing = prev[idx];
+    const updated: LocalEntry = { ...existing, ...patch, id };
     if (patch.date !== undefined) {
       updated.month = patch.date.slice(0, 7);
       updated.year = Number(patch.date.slice(0, 4));
@@ -101,21 +104,40 @@ export class EntriesService {
     this._entries.set(next);
     try {
       await this.idb.put('entries', updated);
-      return updated;
     } catch (err) {
       this._entries.set(prev);
       const appErr = this.toIdbError(err);
       this.notification.showError(appErr);
       throw appErr;
     }
+    try {
+      if (existing.syncStatus === 'synced') {
+        await this.syncQueue.enqueue({
+          operation: 'UPDATE',
+          entryData: updated,
+          categoryData: null,
+          targetEntryId: id,
+          targetTabName: existing.tabName,
+        });
+      } else {
+        await this.syncQueue.replaceEntryData(id, updated);
+      }
+    } catch (err) {
+      // syncQueue failure — roll back signal and IDB to keep state consistent
+      this._entries.set(prev);
+      await this.idb.put('entries', existing).catch(() => {});
+      const appErr = this.toIdbError(err);
+      this.notification.showError(appErr);
+      throw appErr;
+    }
+    return updated;
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string): Promise<LocalEntry | undefined> {
     const prev = this._entries();
-    const idx = prev.findIndex(e => e.id === id);
-    if (idx < 0) return;
-    const next = prev.filter(e => e.id !== id);
-    this._entries.set(next);
+    const snapshot = prev.find(e => e.id === id);
+    if (!snapshot) return undefined;
+    this._entries.update(all => all.filter(e => e.id !== id));
     try {
       await this.idb.delete('entries', id);
     } catch (err) {
@@ -123,6 +145,40 @@ export class EntriesService {
       const appErr = this.toIdbError(err);
       this.notification.showError(appErr);
       throw appErr;
+    }
+    return snapshot;
+  }
+
+  async restore(snapshot: LocalEntry): Promise<void> {
+    const prev = this._entries();
+    try {
+      await this.idb.put('entries', snapshot);
+    } catch (err) {
+      const appErr = this.toIdbError(err);
+      this.notification.showError(appErr);
+      throw appErr;
+    }
+    this._entries.update(all => {
+      const next = [...all, snapshot];
+      next.sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date);
+        return b.id.localeCompare(a.id);
+      });
+      return next;
+    });
+  }
+
+  async finalizeDelete(snapshot: LocalEntry): Promise<void> {
+    if (snapshot.syncStatus === 'synced') {
+      await this.syncQueue.enqueue({
+        operation: 'DELETE',
+        entryData: null,
+        categoryData: null,
+        targetEntryId: snapshot.id,
+        targetTabName: snapshot.tabName,
+      });
+    } else {
+      await this.syncQueue.dequeue(snapshot.id);
     }
   }
 

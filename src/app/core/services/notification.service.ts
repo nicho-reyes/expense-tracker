@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { AppError } from '../models/error.model';
+import { LocalEntry } from '../models/entry.model';
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
@@ -27,6 +28,13 @@ export class NotificationService {
   showInfo(message: string): void {
     this.snackBar.open(message, 'Close', {
       duration: 3000,
+      panelClass: ['snack-info'],
+    });
+  }
+
+  showUndoableDelete(_snapshot: LocalEntry): MatSnackBarRef<TextOnlySnackBar> {
+    return this.snackBar.open('Entry deleted', 'Undo', {
+      duration: 5000,
       panelClass: ['snack-info'],
     });
   }
