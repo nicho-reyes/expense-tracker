@@ -14,6 +14,7 @@ import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { AuthService } from './core/services/auth.service';
 import { CategoriesService } from './core/services/categories.service';
 import { ConfigService } from './core/services/config.service';
+import { EntriesService } from './core/services/entries.service';
 import { provideServiceWorker } from '@angular/service-worker';
 
 export const appConfig: ApplicationConfig = {
@@ -29,9 +30,9 @@ export const appConfig: ApplicationConfig = {
     }),
     {
       provide: APP_INITIALIZER,
-      useFactory: (config: ConfigService, auth: AuthService, categories: CategoriesService) =>
-        () => config.load().then(() => auth.init()).then(() => categories.init()),
-      deps: [ConfigService, AuthService, CategoriesService],
+      useFactory: (config: ConfigService, auth: AuthService, categories: CategoriesService, entries: EntriesService) =>
+        () => config.load().then(() => auth.init()).then(() => categories.init()).then(() => entries.init()),
+      deps: [ConfigService, AuthService, CategoriesService, EntriesService],
       multi: true,
     },
   ],

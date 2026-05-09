@@ -25,6 +25,15 @@
 - 401 from Sheets API maps to generic SHEETS_API, not AUTH_EXPIRED — token expiry during setup shows "Sheets error (401)". Belongs to Story 1.3 (token refresh). [sheets.service.ts:fetchSpreadsheetMeta]
 - `_loadedFromIdb` not reset if `idb.get` throws — every subsequent guard activation retries the failing IDB call with no error boundary or fallback state. IDB error handling strategy to be defined in a later story. [sheets.service.ts:ensureLoaded]
 
+## Deferred from: code review of 2-1-entriesservice-idb-crud-and-optimistic-signal-update (2026-05-09)
+
+- `init()` single-flight seals after transient IDB failure — no retry path for the lifetime of the service instance. By-design per spec ("boot must continue with empty list"). A retry/reset mechanism should be considered if offline resilience is required. [entries.service.ts]
+- Concurrent `add()` calls: failed A rollback clobbers B's successful signal entry — both capture same `prev` snapshot; A's rollback `set(prev)` discards B's optimistic update even if B's IDB write succeeded. Requires a mutex or event queue. [entries.service.ts:add()]
+- Concurrent `update()` + `delete()` stale-capture rollback: interleaved calls can resurface a deleted entry in the signal after a failed update restores its older snapshot. Same root cause as concurrent add() race. [entries.service.ts]
+- `update()` allows patching `isReadOnly` and `syncStatus` with no guard — Story 2.4 owns read-only entry protection; guard should be added there. [entries.service.ts:update()]
+- E2E `page.reload()` is an imperfect proxy for true tab close+reopen (AC8) — `page.close()` + `context.newPage()` + `page.goto('/')` would exercise full OS-level IDB durability. [e2e/entry-persistence.spec.ts]
+- Module-level `fakeDb` mutable state in `idb.service.spec.ts` — concurrent runner risk under `--pool=threads`; tests should obtain db reference via `service.getDb()` rather than module-level variable if parallel runner is adopted. [idb.service.spec.ts]
+
 ## Deferred from: code review of 1-2-google-oauth-authentication-flow (2026-05-08)
 
 - GIS `callback` and `error_callback` closures captured at `initTokenClient` time have no teardown path — a stale callback can fire after the service is re-initialised in tests or if the app ever hot-replaces the service. No Angular `DestroyRef` or `ngOnDestroy` hook exists on the service. Acceptable for a `providedIn: 'root'` singleton with a single lifetime; add a destroy guard if the service scope ever changes. [auth.service.ts:119-124]

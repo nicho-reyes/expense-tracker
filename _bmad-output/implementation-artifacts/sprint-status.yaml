@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08
-last_updated: 2026-05-09T15:00:00Z
+last_updated: 2026-05-09T15:30:00Z
 project: expense-dashboard
 
 project_key: NOKEY
@@ -54,8 +54,8 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Expense Entry & Local-First Core
-  epic-2: backlog
-  2-1-entriesservice-idb-crud-and-optimistic-signal-update: backlog
+  epic-2: in-progress
+  2-1-entriesservice-idb-crud-and-optimistic-signal-update: done
   2-2-quickadd-bottom-sheet-category-amount-date-and-remarks: backlog
   2-3-entry-list-view-and-entryrowcomponent: backlog
   2-4-edit-and-delete-entry-with-confirmation-and-undo: backlog

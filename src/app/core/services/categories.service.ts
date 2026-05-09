@@ -27,7 +27,7 @@ export class CategoriesService {
 
   async init(): Promise<void> {
     try {
-      const raw = await this.idb.getAll<Category>('categories');
+      const raw = await this.idb.getAll('categories');
       const cached = [...raw].sort((a, b) => a.position - b.position);
       if (cached.length) {
         this._categories.set(cached);
