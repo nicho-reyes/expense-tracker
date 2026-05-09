@@ -327,6 +327,58 @@ describe('CategoriesService', () => {
     });
   });
 
+  describe('update()', () => {
+    const cat: Category = { id: 'food', name: 'Food', color: '#6366f1', position: 0 };
+    const updated: Category = { ...cat, color: '#ef4444' };
+
+    beforeEach(async () => {
+      idbSpy.getAll.mockResolvedValue([cat]);
+      sheetsSpy.connectedSpreadsheetId.mockReturnValue(null);
+      await service.init();
+    });
+
+    it('persists to IDB (AC5)', async () => {
+      await service.update(updated);
+      expect(idbSpy.set).toHaveBeenCalledWith('categories', updated.id, updated);
+    });
+
+    it('updates _categories signal (AC3)', async () => {
+      await service.update(updated);
+      const result = service.categories().find(c => c.id === 'food');
+      expect(result?.color).toBe('#ef4444');
+    });
+
+    it('calls setProperty with new color immediately (AC3)', async () => {
+      await service.update(updated);
+      expect(setPropertySpy).toHaveBeenCalledWith('--color-food', '#ef4444');
+    });
+
+    it('verifies CSS variable value via getPropertyValue after update (AC3)', async () => {
+      await service.update(updated);
+      const value = document.documentElement.style.getPropertyValue('--color-food');
+      expect(value).toBe('#ef4444');
+    });
+
+    it('throws IDB_ERROR on persistence failure (AC5)', async () => {
+      idbSpy.set.mockRejectedValue(new Error('disk full'));
+      await expect(service.update(updated)).rejects.toMatchObject({ type: 'IDB_ERROR' });
+    });
+
+    it('does not update signal when IDB write fails (AC5)', async () => {
+      idbSpy.set.mockRejectedValue(new Error('disk full'));
+      try { await service.update(updated); } catch { /* expected */ }
+      expect(service.categories().find(c => c.id === 'food')?.color).toBe('#6366f1');
+    });
+  });
+
+  describe('removeCssVar()', () => {
+    it('calls removeProperty on documentElement.style', () => {
+      const removeSpy = vi.spyOn(document.documentElement.style, 'removeProperty');
+      service.removeCssVar('food');
+      expect(removeSpy).toHaveBeenCalledWith('--color-food');
+    });
+  });
+
   describe('refreshFromSheet()', () => {
     it('calls notification.showInfo with placeholder message (AC4 stub)', async () => {
       await service.refreshFromSheet();

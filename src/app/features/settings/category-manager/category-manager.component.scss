@@ -15,10 +15,21 @@
 }
 
 .cm-dot {
+  position: relative;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   background: var(--mat-sys-outline);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cm-dot::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
 }
 
 .cdk-drag-preview { box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18); }

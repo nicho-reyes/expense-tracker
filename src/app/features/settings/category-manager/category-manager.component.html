@@ -7,8 +7,11 @@
   <ul cdkDropList (cdkDropListDropped)="onDrop($event)" class="cm-list">
     @for (cat of categories(); track cat.id) {
       <li cdkDrag class="cm-row">
-        <span class="cm-dot" aria-hidden="true"
-              [style.background]="'var(--color-' + cat.id + ')'"></span>
+        <button type="button"
+                class="cm-dot"
+                [attr.aria-label]="'Change color for ' + cat.name"
+                [style.background]="'var(--color-' + cat.id + ')'"
+                (click)="onColorTap(cat)"></button>
         <span class="cm-name">{{ cat.name }}</span>
         <button mat-icon-button cdkDragHandle aria-label="Reorder category">
           <mat-icon>drag_indicator</mat-icon>

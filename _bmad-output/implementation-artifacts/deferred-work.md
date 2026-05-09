@@ -42,6 +42,12 @@
 - `canGoNext` doesn't re-evaluate when local clock crosses midnight without user interaction — minor UX edge case. [dashboard.component.ts]
 - `initPromise` single-flight has no reset mechanism — pre-existing design from Story 2.1; relevant if offline resilience with retry is needed. [entries.service.ts]
 
+## Deferred from: code review of 5-2-colorpicker-and-per-category-color-assignment (2026-05-09)
+
+- `removeCssVar()` has no current caller — intentional cross-wave API for Story 5.3 (delete category); stale `--color-*` CSS props persist until then. [categories.service.ts]
+- ColorPickerDialog preview area has no `aria-live` region — color selection changes via preset or custom hex are not announced to screen readers (hex text is visible but not live). Low impact given the visual ring indicator. [color-picker.dialog.html]
+- Forced-colors / Windows High Contrast Mode: swatch selection ring (box-shadow) is suppressed; all swatches may render as system `ButtonFace`. No `outline` fallback exists. Enhancement for a future accessibility pass. [color-picker.dialog.html]
+
 ## Deferred from: code review of 1-2-google-oauth-authentication-flow (2026-05-08)
 
 - GIS `callback` and `error_callback` closures captured at `initTokenClient` time have no teardown path — a stale callback can fire after the service is re-initialised in tests or if the app ever hot-replaces the service. No Angular `DestroyRef` or `ngOnDestroy` hook exists on the service. Acceptable for a `providedIn: 'root'` singleton with a single lifetime; add a destroy guard if the service scope ever changes. [auth.service.ts:119-124]

@@ -1,9 +1,12 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog } from '@angular/material/dialog';
 import { CategoriesService } from '../../../core/services/categories.service';
 import { Category } from '../../../core/models/category.model';
+import { ColorPickerDialog, ColorPickerData } from '../color-picker.dialog';
 
 @Component({
   selector: 'app-category-manager',
@@ -15,7 +18,9 @@ import { Category } from '../../../core/models/category.model';
 })
 export class CategoryManagerComponent {
   private readonly categoriesService = inject(CategoriesService);
+  private readonly dialog = inject(MatDialog);
   readonly categories = this.categoriesService.categories;
+  private colorDialogOpen = false;
 
   async onDrop(event: CdkDragDrop<Category[]>): Promise<void> {
     if (event.previousIndex === event.currentIndex) return;
@@ -27,6 +32,20 @@ export class CategoryManagerComponent {
       await this.categoriesService.reorder(reorderedIds);
     } catch {
       // CategoriesService already surfaced the error and rolled back the signal.
+    }
+  }
+
+  async onColorTap(category: Category): Promise<void> {
+    if (this.colorDialogOpen) return;
+    this.colorDialogOpen = true;
+    const ref = this.dialog.open<ColorPickerDialog, ColorPickerData, string | null>(
+      ColorPickerDialog,
+      { data: { categoryId: category.id, currentColor: category.color } },
+    );
+    const result = await firstValueFrom(ref.afterClosed(), { defaultValue: null });
+    this.colorDialogOpen = false;
+    if (result != null) {
+      await this.categoriesService.update({ ...category, color: result });
     }
   }
 

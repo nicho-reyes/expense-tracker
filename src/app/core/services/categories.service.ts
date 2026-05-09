@@ -170,11 +170,28 @@ export class CategoriesService {
       }, []);
   }
 
-  private injectCssProperties(categories: Category[]): void {
-    const root = document.documentElement.style;
-    for (const cat of categories) {
-      root.setProperty(`--color-${cat.id}`, cat.color);
+  async update(category: Category): Promise<void> {
+    try {
+      await this.idb.set('categories', category.id, category);
+    } catch (err) {
+      throw this.toIdbError(err);
     }
+    this._categories.update(arr => arr.map(c => c.id === category.id ? category : c));
+    this.setCssVar(category.id, category.color);
+  }
+
+  removeCssVar(id: string): void {
+    document.documentElement.style.removeProperty(`--color-${id}`);
+  }
+
+  private injectCssProperties(categories: Category[]): void {
+    for (const cat of categories) {
+      this.setCssVar(cat.id, cat.color);
+    }
+  }
+
+  private setCssVar(id: string, color: string): void {
+    document.documentElement.style.setProperty(`--color-${id}`, color);
   }
 
   private toIdbError(err: unknown): AppError {

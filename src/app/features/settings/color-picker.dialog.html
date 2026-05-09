@@ -1,0 +1,53 @@
+<h2 mat-dialog-title>Choose color</h2>
+
+<mat-dialog-content class="flex flex-col gap-4">
+  <div class="grid grid-cols-6 gap-2" aria-label="Color palette">
+    @for (swatch of presets; track swatch.color) {
+      <button
+        type="button"
+        [attr.aria-pressed]="selectedColor() === swatch.color"
+        [attr.aria-label]="swatch.name"
+        class="w-10 h-10 rounded-full"
+        [class.ring-2]="selectedColor() === swatch.color"
+        [class.ring-indigo-500]="selectedColor() === swatch.color"
+        [class.ring-offset-2]="selectedColor() === swatch.color"
+        [style.background-color]="swatch.color"
+        (click)="onPresetClick(swatch.color)"></button>
+    }
+  </div>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Custom hex</mat-label>
+    <input
+      matInput
+      type="text"
+      placeholder="#6366f1"
+      [ngModel]="customHexInput()"
+      (ngModelChange)="onCustomHexChange($event)"
+      pattern="^#?[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$" />
+    @if (customHexError(); as msg) {
+      <mat-error>{{ msg }}</mat-error>
+    }
+  </mat-form-field>
+
+  <div class="flex items-center gap-2">
+    <span class="text-sm text-zinc-500">Preview</span>
+    <span
+      aria-hidden="true"
+      class="w-6 h-6 rounded-full"
+      [style.background-color]="selectedColor()"></span>
+    <span class="text-sm font-mono">{{ selectedColor() }}</span>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="onCancel()">Cancel</button>
+  <button
+    mat-flat-button
+    color="primary"
+    type="button"
+    [disabled]="!isValidSelection()"
+    (click)="onConfirm()">
+    Confirm
+  </button>
+</mat-dialog-actions>

@@ -84,7 +84,7 @@ development_status:
   # Epic 5: Category Management & Visual Customization
   epic-5: in-progress
   5-1-categorymanager-settings-screen-with-drag-drop-reorder: done
-  5-2-colorpicker-and-per-category-color-assignment: backlog
+  5-2-colorpicker-and-per-category-color-assignment: done
   5-3-create-and-delete-categories-with-sheet-write-back: backlog
   epic-5-retrospective: optional
 
