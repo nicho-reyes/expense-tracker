@@ -18,6 +18,7 @@ export class AuthComponent {
 
   readonly isLoading = signal(false);
   readonly errorMessage = signal<string | null>(null);
+  readonly isReauthMode = this.auth.isReauthPending;
 
   constructor() {
     if (this.auth.isAuthenticated()) {

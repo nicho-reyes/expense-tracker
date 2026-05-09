@@ -1,6 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { Observable, EMPTY, from, map, catchError, finalize } from 'rxjs';
 import { NotificationService } from './notification.service';
+import { SyncQueueService } from './sync-queue.service';
 import { environment } from '../../../environments/environment';
 import type { GisClientConfigError, GisTokenClient, GisTokenResponse } from '../models/gis.types';
 
@@ -17,6 +19,7 @@ const SESSION_EXPIRY_KEY = 'auth_session_expiry';
 export class AuthService {
   private readonly notification = inject(NotificationService);
   private readonly router = inject(Router);
+  private readonly syncQueue = inject(SyncQueueService);
 
   private readonly _user = signal<AuthUser | null>(null);
   private tokenClient: GisTokenClient | null = null;
@@ -24,10 +27,14 @@ export class AuthService {
 
   private _isSignInContext = false;
   private _pendingCallbacks: { resolve: () => void; reject: (err: Error) => void } | null = null;
+  private _refreshTimerId: ReturnType<typeof setTimeout> | null = null;
+  private _isRefreshInProgress = false;
 
   readonly isAuthenticated = computed(
     () => !!this._user() && this._user()!.expiresAt > Date.now(),
   );
+
+  readonly isReauthPending = signal(false);
 
   async init(): Promise<void> {
     try {
@@ -66,7 +73,12 @@ export class AuthService {
   }
 
   signOut(): void {
+    if (this._refreshTimerId !== null) {
+      clearTimeout(this._refreshTimerId);
+      this._refreshTimerId = null;
+    }
     this._user.set(null);
+    this.isReauthPending.set(false);
     sessionStorage.removeItem(SESSION_EXPIRY_KEY);
     this.router.navigate(['/auth']);
   }
@@ -75,6 +87,59 @@ export class AuthService {
     const user = this._user();
     if (!user || user.expiresAt <= Date.now()) return null;
     return user.accessToken;
+  }
+
+  handleUnauthorized(): Observable<string> {
+    if (this._isRefreshInProgress) {
+      return EMPTY;
+    }
+    this._isRefreshInProgress = true;
+    this.isReauthPending.set(true);
+
+    return from(this.attemptSilentRefresh()).pipe(
+      map(() => {
+        const token = this.getAccessToken();
+        if (!token) throw new Error('Silent refresh produced no token');
+        return token;
+      }),
+      catchError(() => {
+        this.notification.showError({ type: 'AUTH_REVOKED' }, 'Sign in');
+        this.isReauthPending.set(false);
+        this.router.navigate(['/auth']);
+        return EMPTY;
+      }),
+      finalize(() => {
+        this._isRefreshInProgress = false;
+      }),
+    );
+  }
+
+  private scheduleTokenRefresh(expiresAt: number): void {
+    if (this._refreshTimerId !== null) {
+      clearTimeout(this._refreshTimerId);
+    }
+    const delay = expiresAt - Date.now() - 5 * 60 * 1000;
+    if (delay <= 0) {
+      this.triggerProactiveRefresh();
+      return;
+    }
+    this._refreshTimerId = setTimeout(() => {
+      this._refreshTimerId = null;
+      this.triggerProactiveRefresh();
+    }, delay);
+  }
+
+  private triggerProactiveRefresh(): void {
+    if (this._isRefreshInProgress) return;
+    this.attemptSilentRefresh().then(() => {
+      if (!this.isAuthenticated()) {
+        this.isReauthPending.set(true);
+        this.router.navigate(['/auth']);
+      }
+    }).catch(() => {
+      this.isReauthPending.set(true);
+      this.router.navigate(['/auth']);
+    });
   }
 
   private loadGisScript(): Promise<void> {
@@ -183,8 +248,17 @@ export class AuthService {
     }
 
     const expiresAt = Date.now() + exp * 1000;
+    const wasReauthPending = this.isReauthPending();
+
     this._user.set({ accessToken: response.access_token, expiresAt });
     sessionStorage.setItem(SESSION_EXPIRY_KEY, String(expiresAt));
+
+    this.scheduleTokenRefresh(expiresAt);
+
+    if (wasReauthPending) {
+      this.isReauthPending.set(false);
+      this.syncQueue.retryAll().catch(() => {});
+    }
 
     if (wasSignInContext) {
       this.router.navigate(['/']).catch(() => {});

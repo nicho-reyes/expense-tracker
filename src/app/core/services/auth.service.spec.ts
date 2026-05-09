@@ -1,7 +1,8 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { AuthService } from './auth.service';
 import { NotificationService } from './notification.service';
+import { SyncQueueService } from './sync-queue.service';
 
 // Mock GIS window.google
 function setupGisMock(options: {
@@ -63,6 +64,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let routerSpy: { navigate: ReturnType<typeof vi.fn> };
   let notificationSpy: { showError: ReturnType<typeof vi.fn>; showSuccess: ReturnType<typeof vi.fn>; showInfo: ReturnType<typeof vi.fn> };
+  let syncQueueSpy: { retryAll: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     routerSpy = { navigate: vi.fn().mockResolvedValue(true) };
@@ -71,6 +73,7 @@ describe('AuthService', () => {
       showSuccess: vi.fn(),
       showInfo: vi.fn(),
     };
+    syncQueueSpy = { retryAll: vi.fn().mockResolvedValue(undefined) };
 
     // Stub environment with a googleClientId
     vi.stubGlobal('environment', undefined);
@@ -80,6 +83,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: Router, useValue: routerSpy },
         { provide: NotificationService, useValue: notificationSpy },
+        { provide: SyncQueueService, useValue: syncQueueSpy },
       ],
     });
     service = TestBed.inject(AuthService);
@@ -98,6 +102,10 @@ describe('AuthService', () => {
 
     it('getAccessToken returns null initially', () => {
       expect(service.getAccessToken()).toBeNull();
+    });
+
+    it('isReauthPending is false initially', () => {
+      expect(service.isReauthPending()).toBe(false);
     });
   });
 
@@ -165,6 +173,23 @@ describe('AuthService', () => {
       expect(sessionStorage.getItem('auth_session_expiry')).toBeNull();
       expect(routerSpy.navigate).toHaveBeenCalledWith(['/auth']);
     });
+
+    it('clears the refresh timer on signOut', () => {
+      vi.useFakeTimers();
+      const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+      const timerId = setTimeout(() => {}, 100_000);
+      (service as any)._refreshTimerId = timerId;
+      service.signOut();
+      expect(clearSpy).toHaveBeenCalledWith(timerId);
+      expect((service as any)._refreshTimerId).toBeNull();
+      vi.useRealTimers();
+    });
+
+    it('resets isReauthPending to false on signOut', () => {
+      service.isReauthPending.set(true);
+      service.signOut();
+      expect(service.isReauthPending()).toBe(false);
+    });
   });
 
   describe('handleErrorCallback()', () => {
@@ -196,6 +221,153 @@ describe('AuthService', () => {
       (service as any)._isSignInContext = false;
       (service as any).handleErrorCallback({ type: 'popup_closed' });
       expect(notificationSpy.showError).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('scheduleTokenRefresh()', () => {
+    it('schedules a setTimeout for the computed delay', () => {
+      vi.useFakeTimers();
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+      const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour from now
+      (service as any).scheduleTokenRefresh(expiresAt);
+      expect(setTimeoutSpy).toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('calls triggerProactiveRefresh when the timer fires at 55 minutes', () => {
+      vi.useFakeTimers();
+      const spy = vi.spyOn(service as any, 'triggerProactiveRefresh').mockImplementation(() => {});
+      const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
+      (service as any).scheduleTokenRefresh(expiresAt);
+      vi.advanceTimersByTime(55 * 60 * 1000); // advance 55 minutes
+      expect(spy).toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('triggers immediately when token expires within 5 minutes', () => {
+      const spy = vi.spyOn(service as any, 'triggerProactiveRefresh').mockImplementation(() => {});
+      const expiresAt = Date.now() + 2 * 60 * 1000; // only 2 min left
+      (service as any).scheduleTokenRefresh(expiresAt);
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it('clears existing timer before scheduling a new one', () => {
+      vi.useFakeTimers();
+      const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+      const existingId = setTimeout(() => {}, 999_999);
+      (service as any)._refreshTimerId = existingId;
+      const expiresAt = Date.now() + 60 * 60 * 1000;
+      (service as any).scheduleTokenRefresh(expiresAt);
+      expect(clearSpy).toHaveBeenCalledWith(existingId);
+      vi.useRealTimers();
+    });
+  });
+
+  describe('handleUnauthorized()', () => {
+    it('sets isReauthPending to true', () => {
+      vi.spyOn(service as any, 'attemptSilentRefresh').mockResolvedValue(undefined);
+      vi.spyOn(service, 'getAccessToken').mockReturnValue(null);
+      service.handleUnauthorized().subscribe();
+      expect(service.isReauthPending()).toBe(true);
+    });
+
+    it('emits AUTH_REVOKED notification when silent refresh fails', async () => {
+      vi.spyOn(service as any, 'attemptSilentRefresh').mockRejectedValue(new Error('fail'));
+      await new Promise<void>((done) => {
+        service.handleUnauthorized().subscribe({ complete: done });
+      });
+      expect(notificationSpy.showError).toHaveBeenCalledWith({ type: 'AUTH_REVOKED' }, 'Sign in');
+    });
+
+    it('does NOT emit AUTH_REVOKED notification when silent refresh succeeds', async () => {
+      vi.spyOn(service as any, 'attemptSilentRefresh').mockResolvedValue(undefined);
+      vi.spyOn(service, 'getAccessToken').mockReturnValue('fresh-token');
+      await new Promise<void>((done) => {
+        service.handleUnauthorized().subscribe({ complete: done });
+      });
+      expect(notificationSpy.showError).not.toHaveBeenCalled();
+    });
+
+    it('resets isReauthPending to false after silent refresh failure', async () => {
+      vi.spyOn(service as any, 'attemptSilentRefresh').mockRejectedValue(new Error('fail'));
+      await new Promise<void>((done) => {
+        service.handleUnauthorized().subscribe({ complete: done });
+      });
+      expect(service.isReauthPending()).toBe(false);
+    });
+
+    it('returns EMPTY and navigates to /auth when silent refresh fails', async () => {
+      vi.spyOn(service as any, 'attemptSilentRefresh').mockRejectedValue(new Error('fail'));
+      const values: string[] = [];
+      await new Promise<void>((done) => {
+        service.handleUnauthorized().subscribe({ next: (v) => values.push(v), complete: done });
+      });
+      expect(values).toHaveLength(0);
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/auth']);
+    });
+
+    it('returns EMPTY immediately when _isRefreshInProgress is true', () => {
+      (service as any)._isRefreshInProgress = true;
+      const values: string[] = [];
+      service.handleUnauthorized().subscribe({ next: (v) => values.push(v) });
+      expect(values).toHaveLength(0);
+      expect(notificationSpy.showError).not.toHaveBeenCalled();
+    });
+
+    it('resets _isRefreshInProgress to false after success path', async () => {
+      vi.spyOn(service as any, 'attemptSilentRefresh').mockResolvedValue(undefined);
+      vi.spyOn(service, 'getAccessToken').mockReturnValue('new-token');
+      await new Promise<void>((done) => {
+        service.handleUnauthorized().subscribe({ complete: done, error: done });
+      });
+      expect((service as any)._isRefreshInProgress).toBe(false);
+    });
+
+    it('resets _isRefreshInProgress to false after failure path', async () => {
+      vi.spyOn(service as any, 'attemptSilentRefresh').mockRejectedValue(new Error('fail'));
+      await new Promise<void>((done) => {
+        service.handleUnauthorized().subscribe({ complete: done, error: done });
+      });
+      expect((service as any)._isRefreshInProgress).toBe(false);
+    });
+
+    it('emits new token when silent refresh succeeds', async () => {
+      vi.spyOn(service as any, 'attemptSilentRefresh').mockResolvedValue(undefined);
+      vi.spyOn(service, 'getAccessToken').mockReturnValue('fresh-token');
+      const values: string[] = [];
+      await new Promise<void>((done) => {
+        service.handleUnauthorized().subscribe({ next: (v) => values.push(v), complete: done });
+      });
+      expect(values).toEqual(['fresh-token']);
+    });
+  });
+
+  describe('retryAll() on re-auth recovery', () => {
+    it('calls retryAll() when isReauthPending was true on a successful token response', () => {
+      service.isReauthPending.set(true);
+      // Stub scheduleTokenRefresh so it doesn't kick off a real timer
+      vi.spyOn(service as any, 'scheduleTokenRefresh').mockImplementation(() => {});
+      // Simulate handleTokenResponse with a valid response
+      (service as any).handleTokenResponse({
+        access_token: 'new-token',
+        expires_in: '3600',
+        token_type: 'Bearer',
+        scope: 'https://www.googleapis.com/auth/spreadsheets',
+      });
+      expect(syncQueueSpy.retryAll).toHaveBeenCalled();
+      expect(service.isReauthPending()).toBe(false);
+    });
+
+    it('does NOT call retryAll() when isReauthPending was false', () => {
+      service.isReauthPending.set(false);
+      vi.spyOn(service as any, 'scheduleTokenRefresh').mockImplementation(() => {});
+      (service as any).handleTokenResponse({
+        access_token: 'new-token',
+        expires_in: '3600',
+        token_type: 'Bearer',
+        scope: 'https://www.googleapis.com/auth/spreadsheets',
+      });
+      expect(syncQueueSpy.retryAll).not.toHaveBeenCalled();
     });
   });
 });

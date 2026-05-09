@@ -19,3 +19,7 @@
 - FAB has no click handler — `<button mat-fab>` is visible and focusable but inert. Story 2.2 wires the tap handler to open `QuickAddSheetComponent`. [src/app/app.html:9-15]
 - BottomNav and FAB render on all routes including unauthenticated `/auth` — shell elements display unconditionally. Story 1.2 activates the auth guard to redirect to `/auth` and Story 1.2 can conditionally suppress shell chrome on that route. [src/app/app.html]
 - `App.isDark` signal declared but never bound in template — initialized in `ngOnInit` but `app.html` doesn't reference it; it's dead state. Intentional per spec pattern; remove or bind in a future story if theme-aware shell elements are added. [src/app/app.ts:19]
+
+## Deferred from: code review of 1-3-token-refresh-and-re-authentication-resilience (2026-05-08)
+
+- `attemptSilentRefresh` / `requestToken` sets `_pendingCallbacks` unconditionally with no guard for an existing value — a second concurrent caller silently orphans the first promise. Pre-existing from Story 1.2; the ID-4 patch (guarding `triggerProactiveRefresh` with `_isRefreshInProgress`) mitigates the primary trigger path. Revisit if additional call sites for `attemptSilentRefresh` are added. [auth.service.ts:requestToken]
