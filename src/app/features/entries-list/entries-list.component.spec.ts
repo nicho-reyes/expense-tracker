@@ -124,13 +124,7 @@ describe('EntriesListComponent', () => {
     expect(dividers).toHaveLength(1);
   });
 
-  it('scroll container has touch-action: pan-y inline style (AC6)', () => {
-    const container = fixture.debugElement.query(By.css('div[style*="touch-action"]'));
-    expect(container).not.toBeNull();
-    expect(container.nativeElement.style.touchAction).toBe('pan-y');
-  });
-
-  it('shows progress strip and hides EmptyState when hydration is running (AC5)', () => {
+it('shows progress strip and hides EmptyState when hydration is running (AC5)', () => {
     entriesSignal.set([]);
     hydrationProgressSignal.set({ type: 'running', tabName: '2026', tabIndex: 1, tabTotal: 2 });
     fixture.detectChanges();

@@ -53,7 +53,10 @@ export class EntriesListComponent {
 
   readonly categoryById = computed<Map<string, Category>>(() => {
     const map = new Map<string, Category>();
-    for (const c of this.categoriesSvc.categories()) map.set(c.id, c);
+    for (const c of this.categoriesSvc.categories()) {
+      map.set(c.id, c);
+      map.set(c.name, c);  // natural-schema entries store the original name, not the slug id
+    }
     return map;
   });
 

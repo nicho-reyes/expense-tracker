@@ -106,9 +106,9 @@ export class SetupComponent {
         this.notification.showError(`Could not read tab "${err.tabName}" — it will be skipped.`);
       }
 
-      const schemaCache: Record<string, '2026' | '2025'> = {};
+      const schemaCache: Record<string, '2026' | '2025' | 'natural'> = {};
       for (const r of results) {
-        if (r.type === '2026' || r.type === '2025') {
+        if (r.type === '2026' || r.type === '2025' || r.type === 'natural') {
           schemaCache[r.tabName] = r.type;
         }
       }

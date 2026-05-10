@@ -4,7 +4,13 @@ import { firstValueFrom, of, throwError } from 'rxjs';
 import { SheetsService } from './sheets.service';
 import { IdbService } from './idb.service';
 import { NotificationService } from './notification.service';
-import { SCHEMA_2026_HEADERS, SCHEMA_2025_HEADERS } from '../models/sheets.model';
+import {
+  SCHEMA_2026_HEADERS,
+  SCHEMA_2025_HEADERS,
+  SCHEMA_NATURAL_HEADERS,
+  schemaNaturalValidator,
+  extractYearFromTabName,
+} from '../models/sheets.model';
 import { LocalEntry } from '../models/entry.model';
 
 const MOCK_ENTRY: LocalEntry = {
@@ -105,6 +111,55 @@ describe('SheetsService', () => {
     it('returns type invalid for empty headers', () => {
       const result = service.detectSchema('Empty', []);
       expect(result.type).toBe('invalid');
+    });
+
+    it('returns type natural for natural-schema headers', () => {
+      const result = service.detectSchema('CH Daily Expenses 2026', SCHEMA_NATURAL_HEADERS);
+      expect(result).toEqual({ type: 'natural', tabName: 'CH Daily Expenses 2026' });
+    });
+  });
+
+  // ── extractYearFromTabName() ──────────────────────────────────────────────
+
+  describe('extractYearFromTabName()', () => {
+    it('"CH Daily Expenses 2026" → 2026', () => {
+      expect(extractYearFromTabName('CH Daily Expenses 2026')).toBe(2026);
+    });
+
+    it('"CH Daily Expenses 2025" → 2025', () => {
+      expect(extractYearFromTabName('CH Daily Expenses 2025')).toBe(2025);
+    });
+
+    it('"2027" (exact four-digit name) → 2027', () => {
+      expect(extractYearFromTabName('2027')).toBe(2027);
+    });
+
+    it('"share" → null', () => {
+      expect(extractYearFromTabName('share')).toBeNull();
+    });
+
+    it('"Sheet8" → null', () => {
+      expect(extractYearFromTabName('Sheet8')).toBeNull();
+    });
+
+    it('"Preparations to CH budgets" → null (no 20xx year)', () => {
+      expect(extractYearFromTabName('Preparations to CH budgets')).toBeNull();
+    });
+  });
+
+  // ── schemaNaturalValidator ────────────────────────────────────────────────
+
+  describe('schemaNaturalValidator', () => {
+    it('passes for ["Month","Date","Category","Price","Remarks"]', () => {
+      expect(schemaNaturalValidator.safeParse(['Month', 'Date', 'Category', 'Price', 'Remarks']).success).toBe(true);
+    });
+
+    it('fails for 2026 headers ["Date","Category","Amount","Remarks","Month","UUID"]', () => {
+      expect(schemaNaturalValidator.safeParse(SCHEMA_2026_HEADERS.slice(0, 5)).success).toBe(false);
+    });
+
+    it('fails for ["Month","Date","Category","Amount","Remarks"] (Price ≠ Amount)', () => {
+      expect(schemaNaturalValidator.safeParse(['Month', 'Date', 'Category', 'Amount', 'Remarks']).success).toBe(false);
     });
   });
 
@@ -437,7 +492,7 @@ describe('SheetsService', () => {
   // ── listYearTabs() ────────────────────────────────────────────────────────
 
   describe('listYearTabs()', () => {
-    it('returns only tabs whose title matches /^\\d{4}$/', async () => {
+    it('returns tabs whose title contains a 20xx year (short and long-form names)', async () => {
       httpSpy.get.mockReturnValue(of({
         spreadsheetId: 'sid',
         properties: { title: 'Expenses' },
@@ -446,12 +501,13 @@ describe('SheetsService', () => {
           { properties: { sheetId: 2, title: 'Categories', index: 1, sheetType: 'GRID', gridProperties: { rowCount: 50, columnCount: 4 } } },
           { properties: { sheetId: 3, title: '2025', index: 2, sheetType: 'GRID', gridProperties: { rowCount: 100, columnCount: 4 } } },
           { properties: { sheetId: 4, title: 'Summary', index: 3, sheetType: 'GRID', gridProperties: { rowCount: 10, columnCount: 10 } } },
+          { properties: { sheetId: 5, title: 'CH Daily Expenses 2027', index: 4, sheetType: 'GRID', gridProperties: { rowCount: 200, columnCount: 5 } } },
         ],
       }));
 
       const result = await service.listYearTabs('sid');
 
-      expect(result.map(t => t.properties.title)).toEqual(['2026', '2025']);
+      expect(result.map(t => t.properties.title)).toEqual(['2026', '2025', 'CH Daily Expenses 2027']);
     });
 
     it('returns empty array when no year-pattern tabs exist', async () => {
@@ -479,6 +535,15 @@ describe('SheetsService', () => {
 
       const url: string = httpSpy.get.mock.calls[0][0];
       expect(url).toContain(encodeURIComponent("'2026'!A2:F"));
+    });
+
+    it('uses valueRenderOption=UNFORMATTED_VALUE', async () => {
+      httpSpy.get.mockReturnValue(of({ range: "'2026'!A2:F", majorDimension: 'ROWS', values: [] }));
+
+      await firstValueFrom(service.readTabDataRows('sid', '2026'));
+
+      const url: string = httpSpy.get.mock.calls[0][0];
+      expect(url).toContain('valueRenderOption=UNFORMATTED_VALUE');
     });
 
     it('returns empty array when Sheets API response has no values', async () => {
@@ -590,6 +655,95 @@ describe('SheetsService', () => {
       expect(entry).not.toBeNull();
       expect(entry!.id).toBe('hydrated-2026-2');
       expect(entry!.month).toBe('2026-05');
+    });
+  });
+
+  // ── mapNaturalRowToLocalEntry() ───────────────────────────────────────────
+
+  describe('mapNaturalRowToLocalEntry()', () => {
+    const TAB = 'CH Daily Expenses 2026';
+
+    it('happy path: maps DD.MM row to LocalEntry with correct date, month, year, amount', () => {
+      const row = ['01', '03.01', 'Groceries', '27.90', 'Assorted goods from Migros'];
+      const entry = service.mapNaturalRowToLocalEntry(TAB, 2, row);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.id).toBe('natural-CH Daily Expenses 2026-2');
+      expect(entry!.date).toBe('2026-01-03');
+      expect(entry!.month).toBe('2026-01');
+      expect(entry!.year).toBe(2026);
+      expect(entry!.category).toBe('Groceries');
+      expect(entry!.amount).toBe(27.9);
+      expect(entry!.remarks).toBe('Assorted goods from Migros');
+      expect(entry!.schemaVersion).toBe('natural');
+      expect(entry!.isReadOnly).toBe(false); // 2026 = current year → editable
+      expect(entry!.syncStatus).toBe('synced');
+    });
+
+    it('negative amount "-200" is valid (credit/refund)', () => {
+      const row = ['01', '03.01', 'Refund', '-200', ''];
+      const entry = service.mapNaturalRowToLocalEntry(TAB, 3, row);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.amount).toBe(-200);
+    });
+
+    it('tab with no year in name → null', () => {
+      const row = ['01', '03.01', 'Groceries', '27.90', ''];
+      expect(service.mapNaturalRowToLocalEntry('Categories', 2, row)).toBeNull();
+    });
+
+    it('non-numeric price "abc" → null', () => {
+      const row = ['01', '03.01', 'Groceries', 'abc', ''];
+      expect(service.mapNaturalRowToLocalEntry(TAB, 2, row)).toBeNull();
+    });
+
+    it('invalid date "99.99" (out of range) → null', () => {
+      const row = ['01', '99.99', 'Groceries', '27.90', ''];
+      expect(service.mapNaturalRowToLocalEntry(TAB, 2, row)).toBeNull();
+    });
+
+    it('missing category → null', () => {
+      const row = ['01', '03.01', '', '27.90', ''];
+      expect(service.mapNaturalRowToLocalEntry(TAB, 2, row)).toBeNull();
+    });
+
+    it('date with month > 12 → null', () => {
+      const row = ['01', '03.13', 'Food', '10.00', ''];
+      expect(service.mapNaturalRowToLocalEntry(TAB, 2, row)).toBeNull();
+    });
+
+    it('date with day < 1 → null', () => {
+      const row = ['01', '00.01', 'Food', '10.00', ''];
+      expect(service.mapNaturalRowToLocalEntry(TAB, 2, row)).toBeNull();
+    });
+
+    it('uses tab from 2025 year correctly: date "05.03" → 2025-03-05', () => {
+      const row = ['03', '05.03', 'Transport', '12.50', 'Bus ticket'];
+      const entry = service.mapNaturalRowToLocalEntry('CH Daily Expenses 2025', 5, row);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.date).toBe('2025-03-05');
+      expect(entry!.month).toBe('2025-03');
+      expect(entry!.year).toBe(2025);
+    });
+
+    it('date as Google Sheets serial (UNFORMATTED_VALUE integer) is parsed correctly', () => {
+      // Serial 46025 = January 3, 2026 in Google Sheets/Excel epoch
+      // (25569 = serial for Unix epoch Jan 1 1970; 46025 - 25569 = 20456 days after epoch)
+      const row = ['01', 46025 as unknown as string, 'Groceries', 27.9 as unknown as string, 'Migros'];
+      const entry = service.mapNaturalRowToLocalEntry(TAB, 2, row);
+
+      expect(entry).not.toBeNull();
+      expect(entry!.date).toBe('2026-01-03');
+      expect(entry!.month).toBe('2026-01');
+      expect(entry!.year).toBe(2026);
+      expect(entry!.amount).toBe(27.9);
+    });
+
+    it('date serial 0 or negative → null', () => {
+      const row = ['01', 0 as unknown as string, 'Food', '10.00', ''];
+      expect(service.mapNaturalRowToLocalEntry(TAB, 2, row)).toBeNull();
     });
   });
 });

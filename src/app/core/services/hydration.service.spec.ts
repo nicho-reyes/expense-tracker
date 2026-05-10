@@ -46,6 +46,7 @@ describe('HydrationService', () => {
     listYearTabs: ReturnType<typeof vi.fn>;
     readTabDataRows: ReturnType<typeof vi.fn>;
     mapRowToLocalEntry: ReturnType<typeof vi.fn>;
+    mapNaturalRowToLocalEntry: ReturnType<typeof vi.fn>;
   };
   let entriesSpy: { refreshFromIdb: ReturnType<typeof vi.fn> };
   let notificationSpy: { showError: ReturnType<typeof vi.fn> };
@@ -71,6 +72,7 @@ describe('HydrationService', () => {
       listYearTabs: vi.fn().mockResolvedValue([TAB_2026]),
       readTabDataRows: vi.fn().mockReturnValue(of([])),
       mapRowToLocalEntry: vi.fn().mockReturnValue(null),
+      mapNaturalRowToLocalEntry: vi.fn().mockReturnValue(null),
     };
     entriesSpy = { refreshFromIdb: vi.fn().mockResolvedValue(undefined) };
     notificationSpy = { showError: vi.fn() };
@@ -111,7 +113,7 @@ describe('HydrationService', () => {
     const results = await service.hydrate();
 
     expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ type: 'skipped', tabName: '2025', reason: 'non-2026-schema' });
+    expect(results[0]).toMatchObject({ type: 'skipped', tabName: '2025', reason: 'non-year-schema' });
     expect(sheetsSpy.readTabDataRows).not.toHaveBeenCalled();
   });
 
@@ -304,5 +306,110 @@ describe('HydrationService', () => {
 
     resolveEnsure();
     await first;
+  });
+
+  // ── RC-3: hydratedAt guard — validCount === 0 with rows present ───────────
+
+  it('all rows fail parsing → deferred result, hydratedAt NOT updated, showError called', async () => {
+    sheetsSpy.readTabDataRows.mockReturnValue(of([['2026-05-01', 'Food', 'NaN', '', '', '']]));
+    sheetsSpy.mapRowToLocalEntry.mockReturnValue(null);
+
+    const results = await service.hydrate();
+
+    expect(results[0]).toMatchObject({ type: 'deferred', tabName: '2026' });
+    expect(idbSpy.set).not.toHaveBeenCalled();
+    expect(notificationSpy.showError).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'SCHEMA_VALIDATION' }),
+    );
+  });
+
+  it('empty tab (rows.length === 0) → hydratedAt written with rowCount: 0, hydrated result', async () => {
+    sheetsSpy.readTabDataRows.mockReturnValue(of([]));
+
+    const results = await service.hydrate();
+
+    expect(results[0]).toMatchObject({ type: 'hydrated', tabName: '2026', rowCount: 0 });
+    expect(idbSpy.set).toHaveBeenCalledWith('appMeta', 'hydratedAt', expect.objectContaining({
+      '2026': expect.objectContaining({ rowCount: 0 }),
+    }));
+  });
+
+  // ── clearPoisonedHydratedAt ────────────────────────────────────────────────
+
+  it('clearPoisonedHydratedAt: removes rowCount=0 entries, keeps rowCount>0', async () => {
+    const poisonedMap: Record<string, HydratedTabRecord> = {
+      '2026': { lastHydratedAt: Date.now() - 5000, rowCount: 0 },
+      '2025': { lastHydratedAt: Date.now() - 5000, rowCount: 150 },
+    };
+    idbSpy.get.mockResolvedValue(poisonedMap);
+
+    // Trigger init() which calls clearPoisonedHydratedAt() then hydrate()
+    sheetsSpy.connectedSpreadsheetId.mockReturnValue(null); // skip hydration
+    await service.init();
+
+    expect(idbSpy.set).toHaveBeenCalledWith('appMeta', 'hydratedAt', { '2025': poisonedMap['2025'] });
+  });
+
+  it('clearPoisonedHydratedAt: no-op when map is already clean', async () => {
+    const cleanMap: Record<string, HydratedTabRecord> = {
+      '2026': { lastHydratedAt: Date.now() - 5000, rowCount: 42 },
+    };
+    idbSpy.get.mockResolvedValue(cleanMap);
+
+    sheetsSpy.connectedSpreadsheetId.mockReturnValue(null);
+    await service.init();
+
+    expect(idbSpy.set).not.toHaveBeenCalled();
+  });
+
+  // ── natural-schema tab hydration ──────────────────────────────────────────
+
+  it('natural-schema tab: 3 valid rows → 3 IDB puts, hydratedAt written with rowCount: 3', async () => {
+    const naturalEntry = (id: string) => ({
+      ...makeEntry(id),
+      schemaVersion: 'natural' as const,
+      isReadOnly: true,
+    });
+
+    sheetsSpy.schemaCache.mockReturnValue({ 'CH Daily Expenses 2026': 'natural' });
+    sheetsSpy.readTabDataRows.mockReturnValue(of([
+      ['01', '03.01', 'Groceries', '27.90', 'Assorted goods'],
+      ['01', '05.01', 'Transport', '12.50', 'Bus'],
+      ['02', '10.02', 'Food', '45.00', 'Restaurant'],
+    ]));
+    sheetsSpy.mapNaturalRowToLocalEntry
+      .mockReturnValueOnce(naturalEntry('n1'))
+      .mockReturnValueOnce(naturalEntry('n2'))
+      .mockReturnValueOnce(naturalEntry('n3'));
+
+    const results = await service.hydrate();
+
+    expect(sheetsSpy.mapNaturalRowToLocalEntry).toHaveBeenCalledTimes(3);
+    expect(sheetsSpy.mapRowToLocalEntry).not.toHaveBeenCalled();
+    expect(idbSpy.put).toHaveBeenCalledTimes(3);
+    expect(idbSpy.set).toHaveBeenCalledWith('appMeta', 'hydratedAt', expect.objectContaining({
+      'CH Daily Expenses 2026': expect.objectContaining({ rowCount: 3 }),
+    }));
+    expect(results[0]).toMatchObject({ type: 'hydrated', tabName: 'CH Daily Expenses 2026', rowCount: 3 });
+  });
+
+  // ── mixed-schema: 2026 and natural tabs in same pass ─────────────────────
+
+  it('mixed-schema spreadsheet: 2026 and natural tabs both processed in same hydration pass', async () => {
+    sheetsSpy.schemaCache.mockReturnValue({
+      '2026': '2026',
+      'CH Daily Expenses 2025': 'natural',
+    });
+    sheetsSpy.readTabDataRows.mockReturnValue(of([]));
+    sheetsSpy.mapRowToLocalEntry.mockReturnValue(null);
+    sheetsSpy.mapNaturalRowToLocalEntry.mockReturnValue(null);
+
+    const results = await service.hydrate();
+
+    const processedTabs = results.map((r) => r.tabName);
+    expect(processedTabs).toContain('2026');
+    expect(processedTabs).toContain('CH Daily Expenses 2025');
+    // Both are processed (empty tabs → hydrated with rowCount: 0)
+    expect(results.filter((r) => r.type === 'hydrated')).toHaveLength(2);
   });
 });

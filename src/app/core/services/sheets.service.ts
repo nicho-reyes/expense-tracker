@@ -16,8 +16,9 @@ import {
   schema2026Validator,
   schema2025Validator,
   schema2026PartialValidator,
+  schemaNaturalValidator,
   SCHEMA_2026_HEADERS,
-  YEAR_TAB_PATTERN,
+  extractYearFromTabName,
 } from '../models/sheets.model';
 
 @Injectable({ providedIn: 'root' })
@@ -26,7 +27,7 @@ export class SheetsService {
   private readonly idb = inject(IdbService);
 
   private readonly _connectedSpreadsheetId = signal<string | null>(null);
-  private readonly _schemaCache = signal<Record<string, '2026' | '2025'>>({});
+  private readonly _schemaCache = signal<Record<string, '2026' | '2025' | 'natural'>>({});
   private _loadedFromIdb = false;
   private _ensureLoadedPromise: Promise<void> | null = null;
 
@@ -39,7 +40,7 @@ export class SheetsService {
     this._ensureLoadedPromise ??= (async () => {
       const id = await this.idb.get<string>('appMeta', 'spreadsheetId');
       this._connectedSpreadsheetId.set(id ?? null);
-      const cache = await this.idb.get<Record<string, '2026' | '2025'>>('appMeta', 'schemaCache');
+      const cache = await this.idb.get<Record<string, '2026' | '2025' | 'natural'>>('appMeta', 'schemaCache');
       this._schemaCache.set(cache ?? {});
       this._loadedFromIdb = true;
     })().catch((err) => {
@@ -103,6 +104,9 @@ export class SheetsService {
     if (schema2025Validator.safeParse(headers.slice(0, 4)).success) {
       return { type: '2025', tabName };
     }
+    if (schemaNaturalValidator.safeParse(headers.slice(0, 5)).success) {
+      return { type: 'natural', tabName };
+    }
     return {
       type: 'invalid',
       tabName,
@@ -123,7 +127,7 @@ export class SheetsService {
 
   async connectSheet(
     spreadsheetId: string,
-    schemaCache: Record<string, '2026' | '2025'>,
+    schemaCache: Record<string, '2026' | '2025' | 'natural'>,
   ): Promise<void> {
     await this.idb.set('appMeta', 'spreadsheetId', spreadsheetId);
     await this.idb.set('appMeta', 'schemaCache', schemaCache);
@@ -149,9 +153,9 @@ export class SheetsService {
     );
   }
 
-  readActiveTabCategoryColumn(spreadsheetId: string, tabName: string): Observable<string[]> {
+  readActiveTabCategoryColumn(spreadsheetId: string, tabName: string, column: 'B' | 'C' = 'B'): Observable<string[]> {
     const escaped = tabName.replace(/'/g, "''");
-    const range = encodeURIComponent(`'${escaped}'!B2:B`);
+    const range = encodeURIComponent(`'${escaped}'!${column}2:${column}`);
     const url = `${environment.sheetsApiBaseUrl}/${spreadsheetId}/values/${range}`;
     return this.http.get<SheetsValueRange>(url).pipe(
       map((res) => (res?.values ?? []).map((row) => (row[0] ?? '').trim()).filter((v) => v.length > 0)),
@@ -165,6 +169,14 @@ export class SheetsService {
     const cache = this._schemaCache();
     for (const [tabName, schema] of Object.entries(cache)) {
       if (schema === '2026') return tabName;
+    }
+    return null;
+  }
+
+  getActiveNaturalTabName(): string | null {
+    const cache = this._schemaCache();
+    for (const [tabName, schema] of Object.entries(cache)) {
+      if (schema === 'natural') return tabName;
     }
     return null;
   }
@@ -262,13 +274,13 @@ export class SheetsService {
 
   async listYearTabs(spreadsheetId: string): Promise<SheetsSheetMeta[]> {
     const meta = await firstValueFrom(this.fetchSpreadsheetMeta(spreadsheetId));
-    return (meta?.sheets ?? []).filter((s) => YEAR_TAB_PATTERN.test(s.properties.title));
+    return (meta?.sheets ?? []).filter((s) => extractYearFromTabName(s.properties.title) !== null);
   }
 
   readTabDataRows(spreadsheetId: string, tabName: string): Observable<string[][]> {
     const escapedTabName = tabName.replace(/'/g, "''");
     const range = encodeURIComponent(`'${escapedTabName}'!A2:F`);
-    const url = `${environment.sheetsApiBaseUrl}/${spreadsheetId}/values/${range}`;
+    const url = `${environment.sheetsApiBaseUrl}/${spreadsheetId}/values/${range}?valueRenderOption=UNFORMATTED_VALUE`;
     return this.http.get<SheetsValueRange>(url).pipe(
       map((res) => res?.values ?? []),
       catchError((err: HttpErrorResponse) =>
@@ -284,7 +296,8 @@ export class SheetsService {
   }
 
   mapRowToLocalEntry(tabName: string, rowIndex: number, row: string[]): LocalEntry | null {
-    const cells = [row[0] ?? '', row[1] ?? '', row[2] ?? '', row[3] ?? '', row[4] ?? '', row[5] ?? ''];
+    // String() guards against UNFORMATTED_VALUE returning numbers for numeric cells
+    const cells = [String(row[0] ?? ''), String(row[1] ?? ''), String(row[2] ?? ''), String(row[3] ?? ''), String(row[4] ?? ''), String(row[5] ?? '')];
     const date = cells[0].trim();
     const category = cells[1].trim();
     const amountRaw = cells[2].trim();
@@ -311,6 +324,62 @@ export class SheetsService {
       sheetRowIndex: rowIndex,
       syncStatus: 'synced',
       isReadOnly: false,
+    };
+  }
+
+  mapNaturalRowToLocalEntry(tabName: string, rowIndex: number, row: string[]): LocalEntry | null {
+    const year = extractYearFromTabName(tabName);
+    if (year === null) return null;
+
+    // String() guards against UNFORMATTED_VALUE returning numbers for date/numeric cells
+    const dateStr = String(row[1] ?? '').trim();
+    const category = String(row[2] ?? '').trim();
+    const priceStr = String(row[3] ?? '').trim();
+    const remarks = String(row[4] ?? '');
+
+    if (!category) return null;
+
+    let day: string, month: string;
+    if (dateStr.includes('.')) {
+      // "D.M" or "DD.MM" text format
+      const parts = dateStr.split('.');
+      if (parts.length !== 2) return null;
+      const dayNum = Number(parts[0]);
+      const monthNum = Number(parts[1]);
+      if (!Number.isFinite(dayNum) || !Number.isFinite(monthNum) ||
+          parts[0] === '' || parts[1] === '' ||
+          dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12) return null;
+      day = String(dayNum).padStart(2, '0');
+      month = String(monthNum).padStart(2, '0');
+    } else {
+      // Google Sheets date serial (UNFORMATTED_VALUE returns integer for date-typed cells)
+      // Serial 25569 = Jan 1, 1970 (Unix epoch) in Excel/Google Sheets
+      const serial = Number(dateStr);
+      if (!Number.isFinite(serial) || serial <= 0 || dateStr === '') return null;
+      const d = new Date((serial - 25569) * 86400000);
+      day = String(d.getUTCDate()).padStart(2, '0');
+      month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    }
+
+    const date = `${year}-${month}-${day}`;
+    const monthStr = `${year}-${month}`;
+
+    const amount = Number(priceStr);
+    if (!Number.isFinite(amount) || priceStr === '') return null;
+
+    return {
+      id: `natural-${tabName}-${rowIndex}`,
+      date,
+      month: monthStr,
+      year,
+      category,
+      amount,
+      remarks,
+      tabName,
+      schemaVersion: 'natural',
+      sheetRowIndex: rowIndex,
+      syncStatus: 'synced',
+      isReadOnly: year < new Date().getFullYear(),
     };
   }
 

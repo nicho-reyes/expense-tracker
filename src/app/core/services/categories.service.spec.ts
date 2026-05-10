@@ -26,6 +26,7 @@ describe('CategoriesService', () => {
     readCategoriesTabColumn: ReturnType<typeof vi.fn>;
     readActiveTabCategoryColumn: ReturnType<typeof vi.fn>;
     getActive2026TabName: ReturnType<typeof vi.fn>;
+    getActiveNaturalTabName: ReturnType<typeof vi.fn>;
     appendCategoryRow: ReturnType<typeof vi.fn>;
   };
   let syncQueueSpy: {
@@ -55,6 +56,7 @@ describe('CategoriesService', () => {
       readCategoriesTabColumn: vi.fn().mockReturnValue(of([])),
       readActiveTabCategoryColumn: vi.fn().mockReturnValue(of([])),
       getActive2026TabName: vi.fn().mockReturnValue(null),
+      getActiveNaturalTabName: vi.fn().mockReturnValue(null),
       appendCategoryRow: vi.fn().mockReturnValue(of(undefined)),
     };
     syncQueueSpy = {
@@ -131,13 +133,27 @@ describe('CategoriesService', () => {
 
       await service.init();
 
-      expect(sheetsSpy.readActiveTabCategoryColumn).toHaveBeenCalledWith('sheet-id', '2026');
+      expect(sheetsSpy.readActiveTabCategoryColumn).toHaveBeenCalledWith('sheet-id', '2026', 'B');
       const names = service.categories().map((c) => c.name);
       expect(names).toEqual(['Groceries', 'Transport']); // deduped and sorted alphabetically
       expect(idbSpy.set).toHaveBeenCalledWith('appMeta', 'categorySource', {
         type: 'column-b-fallback',
         tabName: '2026',
       });
+    });
+
+    it('falls back to column C of natural-schema tab when no 2026 tab exists', async () => {
+      sheetsSpy.connectedSpreadsheetId.mockReturnValue('sheet-id');
+      sheetsSpy.findCategoriesTab.mockResolvedValue(null);
+      sheetsSpy.getActive2026TabName.mockReturnValue(null);
+      sheetsSpy.getActiveNaturalTabName.mockReturnValue('CH Daily Expenses 2026');
+      sheetsSpy.readActiveTabCategoryColumn.mockReturnValue(of(['Groceries', 'Leisure', 'Groceries']));
+
+      await service.init();
+
+      expect(sheetsSpy.readActiveTabCategoryColumn).toHaveBeenCalledWith('sheet-id', 'CH Daily Expenses 2026', 'C');
+      const names = service.categories().map((c) => c.name);
+      expect(names).toEqual(['Groceries', 'Leisure']); // deduped and sorted
     });
 
     it('assigns DEFAULT_CATEGORY_PALETTE colors by position index (AC3)', async () => {

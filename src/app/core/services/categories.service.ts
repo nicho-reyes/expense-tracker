@@ -135,9 +135,15 @@ export class CategoriesService {
       names = await firstValueFrom(this.sheets.readCategoriesTabColumn(spreadsheetId));
       source = { type: 'categories-tab', tabName: 'Categories' };
     } else {
-      const activeTab = this.sheets.getActive2026TabName();
+      let activeTab = this.sheets.getActive2026TabName();
+      let column: 'B' | 'C' = 'B';
+      if (!activeTab) {
+        // Sheets with only natural-schema tabs have categories in column C
+        activeTab = this.sheets.getActiveNaturalTabName();
+        column = 'C';
+      }
       if (!activeTab) return;
-      const raw = await firstValueFrom(this.sheets.readActiveTabCategoryColumn(spreadsheetId, activeTab));
+      const raw = await firstValueFrom(this.sheets.readActiveTabCategoryColumn(spreadsheetId, activeTab, column));
       names = Array.from(new Set(raw)).sort((a, b) => a.localeCompare(b));
       source = { type: 'column-b-fallback', tabName: activeTab };
     }

@@ -9,7 +9,7 @@
       (ngModelChange)="dateValue.set($event)" />
   </mat-form-field>
 
-  <div class="flex gap-2 overflow-x-auto py-2" role="group" aria-label="Category">
+  <div class="flex flex-wrap gap-2 py-2" role="group" aria-label="Category">
     @for (cat of categoryTiles(); track cat.id) {
       <app-category-tile
         [category]="cat"

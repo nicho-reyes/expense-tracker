@@ -15,7 +15,7 @@ export interface LocalEntry {
   amount: number;         // negative = credit/reimbursement
   remarks: string;
   tabName: string;
-  schemaVersion: '2025' | '2026';
+  schemaVersion: '2025' | '2026' | 'natural';
   sheetRowIndex: number | null;
   syncStatus: 'synced' | 'pending' | 'error';
   isReadOnly: boolean;
