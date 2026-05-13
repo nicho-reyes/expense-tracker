@@ -1,41 +1,36 @@
 <div class="flex flex-col gap-4 p-4">
-  <div class="flex items-center justify-center gap-2">
-    <button
-      mat-icon-button
-      type="button"
-      aria-label="Previous month"
-      (click)="onPrevMonth()">
-      <mat-icon>chevron_left</mat-icon>
-    </button>
-    <span class="text-base font-medium" aria-live="polite">{{ formatMonthLabel(selectedMonth()) }}</span>
-    <button
-      mat-icon-button
-      type="button"
-      aria-label="Next month"
-      [disabled]="!canGoNext()"
-      (click)="onNextMonth()">
-      <mat-icon>chevron_right</mat-icon>
-    </button>
+
+  <!-- Summary strip -->
+  <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div class="rounded-xl bg-white dark:bg-zinc-900 shadow-sm p-3 flex flex-col gap-0.5">
+      <span class="text-xs text-zinc-500 uppercase tracking-wide">Today</span>
+      <span class="text-lg font-semibold tabular-nums">{{ todayTotal() | chfCurrency }}</span>
+    </div>
+    <div class="rounded-xl bg-white dark:bg-zinc-900 shadow-sm p-3 flex flex-col gap-0.5">
+      <span class="text-xs text-zinc-500 uppercase tracking-wide">This month</span>
+      <span class="text-lg font-semibold tabular-nums">{{ monthTotal() | chfCurrency }}</span>
+    </div>
+    <div class="rounded-xl bg-white dark:bg-zinc-900 shadow-sm p-3 flex flex-col gap-0.5">
+      <span class="text-xs text-zinc-500 uppercase tracking-wide">This year</span>
+      <span class="text-lg font-semibold tabular-nums">{{ yearTotal() | chfCurrency }}</span>
+    </div>
+    <div class="rounded-xl bg-white dark:bg-zinc-900 shadow-sm p-3 flex flex-col gap-0.5">
+      <span class="text-xs text-zinc-500 uppercase tracking-wide">All time</span>
+      <span class="text-lg font-semibold tabular-nums">{{ allTimeTotal() | chfCurrency }}</span>
+    </div>
   </div>
 
-  <app-hero-card
-    [total]="monthTotal()"
-    [month]="selectedMonth()"
-    [isLoading]="isLoading()" />
+  <!-- Matrix -->
+  <div class="rounded-xl bg-white dark:bg-zinc-950 shadow-sm p-4">
+    <h2 class="text-sm font-semibold text-zinc-500 mb-3">{{ currentYear }}</h2>
+    <app-spending-matrix
+      [entries]="yearEntries()"
+      [categories]="categoriesSvc.categories()"
+      [year]="currentYear"
+      [exclusionSets]="matrixExclusions"
+      (categoryClick)="onCategoryDrilldown($event)" />
+  </div>
 
-  <app-sparkline-chart
-    [data]="monthlyTotals()"
-    [selectedMonth]="selectedMonth()"
-    [isLoading]="isLoading()" />
-
-  <app-kpi-row
-    [selectedMonthTotal]="monthTotal()"
-    [historicalMonthlyTotals]="monthlyTotals()"
-    [selectedMonth]="selectedMonth()"
-    [selectedMonthEntryCount]="selectedMonthEntryCount()"
-    [isLoading]="isLoading()" />
-
-  <!-- Category breakdown bar added in Story 4.3 -->
 </div>
 
 <button
@@ -43,7 +38,8 @@
   mat-fab
   type="button"
   aria-label="Add expense"
-  class="fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50"
+  class="fixed right-4 z-50"
+  style="bottom: calc(80px + env(safe-area-inset-bottom, 0px))"
   [style.visibility]="sheetOpen() ? 'hidden' : 'visible'"
   (click)="onOpenQuickAdd()">
   <mat-icon>add</mat-icon>

@@ -1,0 +1,74 @@
+<div class="overflow-x-auto -mx-4 px-4">
+  <table class="w-full text-sm border-collapse min-w-max">
+    <thead>
+      <tr class="border-b-2 border-zinc-200 dark:border-zinc-700">
+        <th class="text-left py-2 pr-3 font-semibold sticky left-0 bg-white dark:bg-zinc-950 z-10 min-w-[130px]">
+          Category
+        </th>
+        @for (label of monthLabels(); track label) {
+          <th class="text-right py-2 px-2 font-semibold text-zinc-600 dark:text-zinc-400 min-w-[72px]">
+            {{ label }}
+          </th>
+        }
+        <th class="text-right py-2 pl-3 font-semibold min-w-[88px]">Total</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      @for (row of rows(); track row.category.id) {
+        <tr class="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
+            [class.opacity-40]="row.total === 0">
+
+          <td class="py-1.5 pr-3 sticky left-0 bg-white dark:bg-zinc-950 z-10 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
+              (click)="categoryClick.emit({ categoryId: row.category.id, month: null })">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full flex-shrink-0"
+                    [style.background-color]="'var(--color-' + row.category.id + ')'"></span>
+              <span class="whitespace-nowrap">{{ row.category.name }}</span>
+            </div>
+          </td>
+
+          @for (val of row.values; track $index) {
+            <td class="text-right py-1.5 px-2 tabular-nums"
+                [class.cursor-pointer]="val !== 0"
+                [class.hover:text-indigo-600]="val !== 0"
+                (click)="val !== 0 && categoryClick.emit({ categoryId: row.category.id, month: months()[$index] })">
+              @if (val !== 0) {
+                {{ fmt(val) }}
+              } @else {
+                <span class="text-zinc-300 dark:text-zinc-600">—</span>
+              }
+            </td>
+          }
+
+          <td class="text-right py-1.5 pl-3 font-medium tabular-nums cursor-pointer"
+              (click)="categoryClick.emit({ categoryId: row.category.id, month: null })">
+            {{ fmtTotal(row.total) }}
+          </td>
+        </tr>
+      }
+    </tbody>
+
+    <tfoot>
+      <!-- Exclusion subtotals -->
+      @for (excl of exclusionTotals(); track excl.label) {
+        <tr class="border-t border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 text-xs">
+          <td class="py-1.5 pr-3 sticky left-0 bg-white dark:bg-zinc-950 z-10 italic">{{ excl.label }}</td>
+          @for (col of excl.monthTotals; track $index) {
+            <td class="text-right py-1.5 px-2 tabular-nums">{{ fmtTotal(col) }}</td>
+          }
+          <td class="text-right py-1.5 pl-3 tabular-nums font-medium">{{ fmtTotal(excl.total) }}</td>
+        </tr>
+      }
+
+      <!-- Grand total -->
+      <tr class="border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
+        <td class="py-2 pr-3 sticky left-0 bg-white dark:bg-zinc-950 z-10">Grand Total</td>
+        @for (col of columnTotals(); track $index) {
+          <td class="text-right py-2 px-2 tabular-nums">{{ fmtTotal(col) }}</td>
+        }
+        <td class="text-right py-2 pl-3 tabular-nums text-base">{{ fmtTotal(grandTotal()) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>

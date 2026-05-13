@@ -152,6 +152,56 @@ So that I can review exactly what I spent in any category.
 **When** it loads
 **Then** the correct category and month data is displayed from IDB
 
+---
+
+## Story 4.5: SpendingMatrix year view with category drilldown sheet
+
+As Nick,
+I want a single year-view matrix that shows every category's spending across all 12 months alongside an at-a-glance summary strip,
+So that I can see the shape of my year's spending in one screen and tap any category or month cell to drill into the underlying entries.
+
+**Context:** Additive surface — does NOT replace Stories 4.1–4.4. HeroCard/Sparkline/KpiRow components remain in repo and will be re-composed into the dashboard later. Drilldown here is a `MatBottomSheet`; Story 4.4 retains scope for the routed drill-down page with `DrillDownHeader`.
+
+**Acceptance Criteria:**
+
+**Given** the dashboard renders
+**When** the summary strip is shown
+**Then** four cards display: Today / This month / This year / All time, each formatted via `ChfCurrencyPipe`
+
+**Given** `SpendingMatrixComponent` mounts for the current year
+**When** the table renders
+**Then** rows are one-per-category (alphabetical by name), columns are 12 months (Jan–Dec), with the leftmost column sticky
+
+**Given** an entry's `LocalEntry.category` (display name)
+**When** the matrix groups totals
+**Then** the entry is bucketed by `slugifyCategoryId(category)` against `Category.id`; entries referencing unknown categories are excluded
+
+**Given** a cell is zero
+**When** it renders
+**Then** it shows `—` in muted color and is non-clickable; non-zero cells use `Intl.NumberFormat('de-CH', ...)` and are clickable
+
+**Given** the matrix has an `exclusionSets` input
+**When** the totals rows render
+**Then** one subtotal row per set appears above the grand total, computing per-month and overall totals excluding the configured `excludeIds`
+
+**Given** I tap a category name OR a non-zero month cell
+**When** the click fires
+**Then** `CategoryDrilldownSheetComponent` opens as a `MatBottomSheet`: category-name tap scopes to the year, month-cell tap scopes to that month
+
+**Given** the drilldown sheet renders
+**When** the entry list is shown
+**Then** entries sort descending by date, dates format as `D MMM`, and negative amounts render in red
+
+**Given** the Dashboard wires the matrix
+**When** the `exclusionSets` input is inspected
+**Then** it passes `[{ "Excl. Taxes & Contributions": [taxes, contributions] }, { "Excl. Taxes, Contributions & Investment": [taxes, contributions, investment] }]`
+
+**Given** `SpendingMatrixComponent` is consumed
+**When** its API is inspected
+**Then** it is `standalone`, `OnPush`, uses `input()` / `output()` only, injects no services, and emits `categoryClick({ categoryId, month: string | null })`
+
+---
+
 ### End-to-End Tests (Playwright — Story 4.4 is Epic 4's last story)
 
 Uses the deterministic 3-month/4-category/20-entry IDB fixture from `idb-helpers.ts`.

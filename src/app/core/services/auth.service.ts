@@ -14,7 +14,7 @@ export interface AuthUser {
 }
 
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
-const SILENT_REFRESH_TIMEOUT_MS = 10_000;
+const SILENT_REFRESH_TIMEOUT_MS = 20_000;
 const SESSION_EXPIRY_KEY = 'auth_session_expiry'; // legacy — scheduled for removal after one release
 const AUTH_KEY = 'auth';
 
@@ -152,11 +152,10 @@ export class AuthService {
     this.attemptSilentRefresh().then(() => {
       if (!this.isAuthenticated()) {
         this.isReauthPending.set(true);
-        this.router.navigate(['/auth']);
+        // Interceptor will catch the next 401 and route to /auth with proper notification
       }
     }).catch(() => {
       this.isReauthPending.set(true);
-      this.router.navigate(['/auth']);
     });
   }
 
@@ -234,7 +233,7 @@ export class AuthService {
         });
         await this.idb.delete('appMeta', AUTH_KEY);
         this.isReauthPending.set(true);
-        this.router.navigate(['/auth']);
+        // authGuard redirects to /auth after APP_INITIALIZER completes — no explicit navigate needed
       }
     } catch {
       this.notification.showError({
@@ -244,7 +243,6 @@ export class AuthService {
       });
       await this.idb.delete('appMeta', AUTH_KEY);
       this.isReauthPending.set(true);
-      this.router.navigate(['/auth']);
     } finally {
       this._isRefreshInProgress = false;
     }
@@ -326,6 +324,11 @@ export class AuthService {
     if (wasReauthPending) {
       this.isReauthPending.set(false);
       this.syncQueue.retryAll().catch(() => {});
+      // GIS may have responded after the silent-refresh timeout, by which point authGuard
+      // already landed the user on /auth. Navigate home now that we have a valid token.
+      if (this.router.url === '/auth') {
+        this.router.navigate(['/']).catch(() => {});
+      }
     }
 
     if (wasSignInContext) {

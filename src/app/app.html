@@ -12,12 +12,3 @@
   <app-sync-status-bar />
   <app-bottom-nav />
 </div>
-
-<button
-  mat-fab
-  aria-label="Add expense"
-  class="fixed z-10"
-  [style.visibility]="fabVisible() ? 'visible' : 'hidden'"
-  style="bottom: calc(80px + env(safe-area-inset-bottom, 0px)); right: 16px; background-color: var(--accent);">
-  <mat-icon>add</mat-icon>
-</button>

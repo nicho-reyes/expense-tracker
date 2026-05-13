@@ -63,7 +63,9 @@ export class HydrationService {
           results.push({ type: 'skipped', tabName: name, reason: 'non-year-schema' });
           return false;
         }
-        if (!opts.force && hydratedAt[name]) {
+        const tabYear = extractYearFromTabName(name);
+        const isCurrentYear = tabYear === new Date().getFullYear();
+        if (!opts.force && !isCurrentYear && hydratedAt[name]) {
           results.push({ type: 'skipped', tabName: name, reason: 'already-hydrated' });
           return false;
         }

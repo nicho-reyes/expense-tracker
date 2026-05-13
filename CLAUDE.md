@@ -77,7 +77,7 @@ Two tab layouts coexist. Schema is detected via Zod validators in `sheets.model.
 
 ### Shared components (`src/app/shared/components/`)
 
-13 reusable components including `entry-row`, `empty-state`, `category-tile`, `sync-status-bar`, `amount-input`. All are standalone with `OnPush` change detection.
+14 reusable components including `entry-row`, `empty-state`, `category-tile`, `sync-status-bar`, `amount-input`, `spending-matrix` (year view, categories × months). All are standalone with `OnPush` change detection.
 
 ### Categories and CSS custom properties
 

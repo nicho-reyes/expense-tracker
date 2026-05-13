@@ -12,45 +12,80 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { QuickAddSheetComponent } from '../entry-form/entry-form.component';
 import { EntriesService } from '../../core/services/entries.service';
-import { HeroCardComponent } from '../../shared/components/hero-card/hero-card.component';
-import { SparklineChartComponent } from '../../shared/components/sparkline-chart/sparkline-chart.component';
-import { KpiRowComponent } from '../../shared/components/kpi-row/kpi-row.component';
-import { addMonths, currentMonthIso, formatMonthLabel } from '../../shared/utils/month.util';
+import { CategoriesService } from '../../core/services/categories.service';
+import { SpendingMatrixComponent, ExclusionSet } from '../../shared/components/spending-matrix/spending-matrix.component';
+import { ChfCurrencyPipe } from '../../shared/pipes/chf-currency.pipe';
+import { CategoryDrilldownSheetComponent } from './category-drilldown-sheet.component';
+import { slugifyCategoryId } from '../../core/models/category.model';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, HeroCardComponent, SparklineChartComponent, KpiRowComponent],
+  imports: [MatButtonModule, MatIconModule, SpendingMatrixComponent, ChfCurrencyPipe],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
 export class DashboardComponent {
   private readonly bottomSheet = inject(MatBottomSheet);
   private readonly entriesSvc = inject(EntriesService);
+  readonly categoriesSvc = inject(CategoriesService);
 
   @ViewChild('fabRef', { static: true }) fabRef!: ElementRef<HTMLButtonElement>;
 
   readonly sheetOpen = signal(false);
-  readonly selectedMonth = signal<string>(currentMonthIso());
+  readonly currentYear = new Date().getFullYear();
 
-  readonly entriesForMonth = computed(() =>
-    this.entriesSvc.entries().filter(e => e.month === this.selectedMonth()),
+  readonly matrixExclusions: ExclusionSet[] = [
+    { label: 'Excl. Taxes & Contributions', excludeIds: ['taxes', 'contributions'] },
+    { label: 'Excl. Taxes, Contributions & Investment', excludeIds: ['taxes', 'contributions', 'investment'] },
+  ];
+
+  private readonly todayIso = new Date().toISOString().slice(0, 10);
+  private readonly currentMonthIso = this.todayIso.slice(0, 7);
+
+  readonly todayTotal = computed(() =>
+    this.entriesSvc.entries()
+      .filter(e => e.date === this.todayIso)
+      .reduce((s, e) => s + e.amount, 0)
   );
 
   readonly monthTotal = computed(() =>
-    this.entriesForMonth().reduce((sum, e) => sum + e.amount, 0),
+    this.entriesSvc.entries()
+      .filter(e => e.month === this.currentMonthIso)
+      .reduce((s, e) => s + e.amount, 0)
   );
 
-  readonly monthlyTotals = computed(() => this.entriesSvc.monthlyTotals());
+  readonly yearTotal = computed(() =>
+    this.entriesSvc.entries()
+      .filter(e => e.year === this.currentYear)
+      .reduce((s, e) => s + e.amount, 0)
+  );
 
-  readonly selectedMonthEntryCount = computed(() => this.entriesForMonth().length);
+  readonly allTimeTotal = computed(() =>
+    this.entriesSvc.entries().reduce((s, e) => s + e.amount, 0)
+  );
 
-  readonly isLoading = computed(() => !this.entriesSvc.isInitialized());
+  readonly yearEntries = computed(() =>
+    this.entriesSvc.entries().filter(e => e.year === this.currentYear)
+  );
 
-  readonly canGoNext = computed(() => this.selectedMonth() < currentMonthIso());
+  onCategoryDrilldown(event: { categoryId: string; month: string | null }): void {
+    const category = this.categoriesSvc.categories().find(c => c.id === event.categoryId);
+    if (!category) return;
 
-  readonly formatMonthLabel = formatMonthLabel;
+    const entries = this.entriesSvc.entries().filter(e => {
+      const key = slugifyCategoryId(e.category);
+      if (key !== event.categoryId) return false;
+      if (event.month) return e.month === event.month;
+      return e.year === this.currentYear;
+    });
+
+    this.bottomSheet.open(CategoryDrilldownSheetComponent, {
+      data: { category, entries, month: event.month, year: this.currentYear },
+      panelClass: 'drilldown-sheet',
+    });
+  }
 
   onOpenQuickAdd(): void {
     this.sheetOpen.set(true);
@@ -62,14 +97,5 @@ export class DashboardComponent {
       this.sheetOpen.set(false);
       this.fabRef.nativeElement.focus();
     });
-  }
-
-  onPrevMonth(): void {
-    this.selectedMonth.update(m => addMonths(m, -1));
-  }
-
-  onNextMonth(): void {
-    if (!this.canGoNext()) return;
-    this.selectedMonth.update(m => addMonths(m, 1));
   }
 }
