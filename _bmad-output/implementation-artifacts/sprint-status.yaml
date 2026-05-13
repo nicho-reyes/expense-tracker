@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08
-last_updated: 2026-05-10T01:00:00Z
+last_updated: 2026-05-13T12:00:00Z
 project: expense-dashboard
 
 project_key: NOKEY
@@ -85,6 +85,7 @@ development_status:
   4-2-sparklinechartcomponent-and-kpirowcomponent: done
   4-3-categorybreakdownbarcomponent: backlog
   4-4-category-month-drill-down-with-drilldownheader: backlog
+  4-5-spending-matrix-year-view-with-category-drilldown-sheet: in-progress
   epic-4-retrospective: optional
 
   # Epic 5: Category Management & Visual Customization
@@ -101,3 +102,8 @@ development_status:
   6-3-year-switcher-and-all-years-aggregated-view: backlog
   6-4-batch-entry-mode-with-automatic-pre-fill: backlog
   epic-6-retrospective: optional
+
+  # Epic 7: Persistent OAuth Session (Nice-to-Have — implement after Epics 1–6 complete)
+  epic-7: backlog
+  7-1-oauth2-authorization-code-flow-with-refresh-tokens: ready-for-dev
+  epic-7-retrospective: optional
